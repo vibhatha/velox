@@ -84,12 +84,24 @@ debug:					#: Build with debugging symbols
 	$(MAKE) cmake BUILD_DIR=debug BUILD_TYPE=Debug
 	$(MAKE) build BUILD_DIR=debug -j ${NUM_THREADS}
 
+debug_vibhatha:					#: Build with debugging symbols
+	$(MAKE) cmake BUILD_DIR=debug BUILD_TYPE=Debug EXTRA_CMAKE_FLAGS="-DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1 -DOPENSSL_LIBRARIES=/usr/local/opt/openssl@1.1/lib"
+	$(MAKE) build BUILD_DIR=debug -j ${NUM_THREADS}
+
 release:				#: Build the release version
 	$(MAKE) cmake BUILD_DIR=release BUILD_TYPE=Release && \
 	$(MAKE) build BUILD_DIR=release
 
 min_debug:				#: Minimal build with debugging symbols
 	$(MAKE) cmake BUILD_DIR=debug BUILD_TYPE=debug EXTRA_CMAKE_FLAGS=-DVELOX_BUILD_MINIMAL=ON
+	$(MAKE) build BUILD_DIR=debug
+
+min_debug_vibhatha:				#: Minimal build with debugging symbols
+	$(MAKE) cmake BUILD_DIR=debug BUILD_TYPE=debug EXTRA_CMAKE_FLAGS="-DVELOX_BUILD_MINIMAL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1 -DOPENSSL_LIBRARIES=/usr/local/opt/openssl@1.1/lib"
+	$(MAKE) build BUILD_DIR=debug
+
+examples_vibhatha:
+	$(MAKE) cmake BUILD_DIR=debug BUILD_TYPE=debug EXTRA_CMAKE_FLAGS="-DVELOX_BUILD_TEST_UTILS=ON -DVELOX_BUILD_TESTING=ON -DVELOX_ENABLE_EXAMPLES=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1 -DOPENSSL_LIBRARIES=/usr/local/opt/openssl@1.1/lib"
 	$(MAKE) build BUILD_DIR=debug
 
 benchmarks-basic-build:
@@ -100,6 +112,10 @@ benchmarks-basic-run:
 	scripts/veloxbench/veloxbench/cpp_micro_benchmarks.py
 
 unittest: debug			#: Build with debugging and run unit tests
+	cd $(BUILD_BASE_DIR)/debug && ctest -j ${NUM_THREADS} -VV --output-on-failure
+
+
+unittest_vibhatha: debug_vibhatha	#: Build with debugging and run unit tests
 	cd $(BUILD_BASE_DIR)/debug && ctest -j ${NUM_THREADS} -VV --output-on-failure
 
 # Build with debugging and run expression fuzzer test. Use a fixed seed to
@@ -145,3 +161,4 @@ help:					#: Show the help messages
 	@cat $(firstword $(MAKEFILE_LIST)) | \
 	awk '/^[-a-z]+:/' | \
 	awk -F: '{ printf("%-20s   %s\n", $$1, $$NF) }'
+
