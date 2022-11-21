@@ -56,7 +56,7 @@ USE_CCACHE=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 endif
 endif
 
-NUM_THREADS ?= $(shell getconf _NPROCESSORS_CONF 2>/dev/null || echo 1)
+NUM_THREADS=4
 CPU_TARGET ?= "avx"
 
 FUZZER_SEED ?= 123456
