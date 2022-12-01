@@ -16,7 +16,6 @@
 
 #include <folly/Random.h>
 
-
 #include "velox/exec/tests/utils/OperatorTestBase.h"
 #include "velox/vector/tests/utils/VectorMaker.h"
 
@@ -42,7 +41,6 @@ using namespace facebook::velox;
 using namespace facebook::velox::test;
 using namespace facebook::velox::exec::test;
 using namespace facebook::velox::substrait;
-
 
 class VeloxSubstraitDemo : public VectorTestBase {
  public:
@@ -95,7 +93,6 @@ void VeloxSubstraitDemo::run() {
   google::protobuf::Arena arena;
   auto substraitPlan = veloxConvertor->toSubstrait(arena, plan);
 
-
   std::shared_ptr<SubstraitVeloxPlanConverter> substraitConverter =
       std::make_shared<SubstraitVeloxPlanConverter>(pool());
 
@@ -104,20 +101,15 @@ void VeloxSubstraitDemo::run() {
   // plan output
   auto evenA = AssertQueryBuilder(plan).copyResults(pool());
 
-  std::cout << std::endl
-            << "> 1 : " << evenA->toString()
-            << std::endl;
+  std::cout << std::endl << "> 1 : " << evenA->toString() << std::endl;
   std::cout << evenA->toString(0, evenA->size()) << std::endl;
 
   // rd_plan output
 
   auto rd_evenA = AssertQueryBuilder(rd_plan).copyResults(pool());
 
-  std::cout << std::endl
-            << "> 2 : " << rd_evenA->toString()
-            << std::endl;
+  std::cout << std::endl << "> 2 : " << rd_evenA->toString() << std::endl;
   std::cout << rd_evenA->toString(0, rd_evenA->size()) << std::endl;
-
 }
 
 int main(int argc, char** argv) {

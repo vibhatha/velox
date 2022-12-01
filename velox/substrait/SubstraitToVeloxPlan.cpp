@@ -148,15 +148,16 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
 
   const auto& inputType = childNode->outputType();
   int colIdx = 0;
-  // Note that Substrait projection adds the project expressions on top of the 
-  // input to the projection node. Thus we need to add the input columns first and
-  // then add the projection expressions.
+  // Note that Substrait projection adds the project expressions on top of the
+  // input to the projection node. Thus we need to add the input columns first
+  // and then add the projection expressions.
 
   // adding input node columns
-  for(uint32_t idx=0; idx < inputType->size(); idx++) {
+  for (uint32_t idx = 0; idx < inputType->size(); idx++) {
     const auto& field_name = inputType->nameOf(idx);
     projectNames.emplace_back(field_name);
-    expressions.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(inputType->childAt(idx), field_name));
+    expressions.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(
+        inputType->childAt(idx), field_name));
     colIdx++;
   }
 

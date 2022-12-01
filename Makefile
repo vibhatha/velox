@@ -56,7 +56,7 @@ USE_CCACHE=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 endif
 endif
 
-NUM_THREADS ?= $(shell getconf _NPROCESSORS_CONF 2>/dev/null || echo 1)
+NUM_THREADS ?=4# $(shell getconf _NPROCESSORS_CONF 2>/dev/null || echo 1)
 CPU_TARGET ?= "avx"
 
 FUZZER_SEED ?= 123456
@@ -85,6 +85,10 @@ build:					#: Build the software based in BUILD_DIR and BUILD_TYPE variables
 debug:					#: Build with debugging symbols
 	$(MAKE) cmake BUILD_DIR=debug BUILD_TYPE=Debug
 	$(MAKE) build BUILD_DIR=debug -j ${NUM_THREADS}
+
+substrait:					#: Build with debugging symbols
+	$(MAKE) cmake BUILD_DIR=debug BUILD_TYPE=Debug EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_SUBSTRAIT=ON"
+	$(MAKE) build BUILD_DIR=debug -j 4
 
 release:				#: Build the release version
 	$(MAKE) cmake BUILD_DIR=release BUILD_TYPE=Release && \
