@@ -119,6 +119,21 @@ target_link_libraries(
   velox_tpch_connector
   velox_memory)
 
+add_executable(velox_substrait_plan_test VeloxSubstraitPlanTest.cpp)
+
+target_link_libraries(
+  velox_substrait_plan_test
+  velox_substrait_plan_converter
+  velox_aggregates
+  velox_type
+  velox_vector
+  velox_vector_test_lib
+  velox_exec
+  velox_exec_test_lib
+  velox_tpch_connector
+  velox_memory)
+
+
 # Aggregation Fuzzer.
 
 add_library(velox_aggregation_fuzzer AggregationFuzzer.cpp)

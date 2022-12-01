@@ -70,6 +70,14 @@ class VeloxSubstraitRoundTripTest : public OperatorTestBase {
     assertQuery(samePlan, duckDbSql);
   }
 
+  ::substrait::Plan& ToSubstrait(google::protobuf::Arena& arena, const std::shared_ptr<const core::PlanNode>& plan) {
+    return veloxConvertor_->toSubstrait(arena, plan);
+  }
+
+  core::PlanNodePtr ToVelox(const ::substrait::Plan& substraitPlan) {
+    return substraitConverter_->toVeloxPlan(substraitPlan);
+  }
+
   std::shared_ptr<VeloxToSubstraitPlanConvertor> veloxConvertor_ =
       std::make_shared<VeloxToSubstraitPlanConvertor>();
   std::shared_ptr<SubstraitVeloxPlanConverter> substraitConverter_ =
@@ -79,9 +87,13 @@ class VeloxSubstraitRoundTripTest : public OperatorTestBase {
 TEST_F(VeloxSubstraitRoundTripTest, project) {
   auto vectors = makeVectors(3, 4, 2);
   createDuckDbTable(vectors);
-  auto plan =
+  auto projectPlan =
       PlanBuilder().values(vectors).project({"c0 + c1", "c1 / c2"}).planNode();
-  assertPlanConversion(plan, "SELECT c0 + c1, c1 / c2 FROM tmp");
+  auto subsEquivalentDuckDbPlan = "SELECT c0, c1, c2, c3, c0 + c1, c1 / c2 FROM tmp";
+  google::protobuf::Arena arena;
+  auto substraitPlan = ToSubstrait(arena, projectPlan);
+  auto veloxPlan = ToVelox(substraitPlan);
+  assertQuery(veloxPlan, subsEquivalentDuckDbPlan);
 }
 
 TEST_F(VeloxSubstraitRoundTripTest, filter) {
