@@ -250,6 +250,42 @@ PlanBuilder& PlanBuilder::project(const std::vector<std::string>& projections) {
   return *this;
 }
 
+PlanBuilder& PlanBuilder::substrait_project(const std::vector<std::string>& projections) {
+  std::vector<core::TypedExprPtr> expressions;
+  std::vector<std::string> projectNames;
+
+  auto source = planNode_;
+  auto inputType = source->outputType();
+
+  for (uint32_t idx = 0; idx < inputType->size(); idx++) {
+    const auto& field_name = inputType->nameOf(idx);
+    projectNames.emplace_back(field_name);
+    expressions.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(
+        inputType->childAt(idx), field_name));
+  }
+
+  for (auto i = 0; i < projections.size(); ++i) {
+    auto untypedExpr = parse::parseExpr(projections[i], options_);
+    expressions.push_back(inferTypes(untypedExpr));
+    if (untypedExpr->alias().has_value()) {
+      projectNames.push_back(untypedExpr->alias().value());
+    } else if (
+        auto fieldExpr =
+            dynamic_cast<const core::FieldAccessExpr*>(untypedExpr.get())) {
+      projectNames.push_back(fieldExpr->getFieldName());
+    } else {
+      projectNames.push_back(fmt::format("p{}", i));
+    }
+  }
+
+  planNode_ = std::make_shared<core::ProjectNode>(
+      nextPlanNodeId(),
+      std::move(projectNames),
+      std::move(expressions),
+      source);
+  return *this;
+}
+
 PlanBuilder& PlanBuilder::optionalFilter(const std::string& optionalFilter) {
   if (optionalFilter.empty()) {
     return *this;

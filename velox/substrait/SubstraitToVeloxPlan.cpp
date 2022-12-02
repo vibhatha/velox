@@ -153,13 +153,13 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
   // and then add the projection expressions.
 
   // adding input node columns
-  for (uint32_t idx = 0; idx < inputType->size(); idx++) {
-    const auto& field_name = inputType->nameOf(idx);
-    projectNames.emplace_back(field_name);
-    expressions.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(
-        inputType->childAt(idx), field_name));
-    colIdx++;
-  }
+  // for (uint32_t idx = 0; idx < inputType->size(); idx++) {
+  //   const auto& field_name = inputType->nameOf(idx);
+  //   projectNames.emplace_back(field_name);
+  //   expressions.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(
+  //       inputType->childAt(idx), field_name));
+  //   colIdx++;
+  // }
 
   // adding projection columns
   for (const auto& expr : projectExprs) {

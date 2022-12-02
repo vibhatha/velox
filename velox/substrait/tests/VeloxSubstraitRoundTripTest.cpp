@@ -23,6 +23,9 @@
 #include "velox/substrait/SubstraitToVeloxPlan.h"
 #include "velox/substrait/VeloxToSubstraitPlan.h"
 
+// TODO: remove or keep it in a proper way
+#include "velox/exec/tests/utils/AssertQueryBuilder.h"
+
 using namespace facebook::velox;
 using namespace facebook::velox::test;
 using namespace facebook::velox::exec::test;
@@ -78,6 +81,10 @@ class VeloxSubstraitRoundTripTest : public OperatorTestBase {
 
   core::PlanNodePtr ToVelox(const ::substrait::Plan& substraitPlan) {
     return substraitConverter_->toVeloxPlan(substraitPlan);
+  }
+
+  RowVectorPtr ExecuteQuery(const std::shared_ptr<const core::PlanNode>& plan) {
+    return AssertQueryBuilder(plan).copyResults(pool());
   }
 
   std::shared_ptr<VeloxToSubstraitPlanConvertor> veloxConvertor_ =
@@ -238,20 +245,54 @@ TEST_F(VeloxSubstraitRoundTripTest, rowConstructor) {
 }
 
 TEST_F(VeloxSubstraitRoundTripTest, projectAs) {
+  // RowVectorPtr vectors = makeRowVector(
+  //     {makeFlatVector<double_t>({0.905791934145, 0.968867771124}),
+  //      makeFlatVector<int64_t>({2499109626526694126, 2342493223442167775}),
+  //      makeFlatVector<int32_t>({581869302, -133711905})});
   RowVectorPtr vectors = makeRowVector(
-      {makeFlatVector<double_t>({0.905791934145, 0.968867771124}),
-       makeFlatVector<int64_t>({2499109626526694126, 2342493223442167775}),
-       makeFlatVector<int32_t>({581869302, -133711905})});
+      {makeFlatVector<double_t>({45.0, 55.0}),
+       makeFlatVector<int64_t>({5, 6}),
+       makeFlatVector<int32_t>({10, 20})});
   createDuckDbTable({vectors});
 
-  auto plan = PlanBuilder()
+  // auto plan = PlanBuilder()
+  //                 .values({vectors})
+  //                 .filter("c0 < 0.5")
+  //                 .project({"c1 * c2 as revenue"})
+  //                 .partialAggregation({}, {"sum(revenue)"})
+  //                 .planNode();
+
+  auto plan2 = PlanBuilder()
                   .values({vectors})
-                  .filter("c0 < 0.5")
-                  .project({"c1 * c2 as revenue"})
-                  .partialAggregation({}, {"sum(revenue)"})
+                  .filter("c0 > 5.0")
+                  .substrait_project({"c1+c2 as cx"})
+                  .partialAggregation({}, {"sum(c0)"})
+                  //.finalAggregation()
                   .planNode();
-  assertPlanConversion(
-      plan, "SELECT sum(c1 * c2) as revenue FROM tmp WHERE c0 < 0.5");
+
+  std::cout << "Velox Plan : " << std::endl;
+  std::cout << plan2->toString(true, true) << std::endl;
+  std::cout << "-------" << std::endl;
+  auto out_1 = ExecuteQuery(plan2);
+
+  std::cout << std::endl << "> 2 : " << out_1->toString() << std::endl;
+  std::cout << out_1->toString(0, out_1->size()) << std::endl;
+  // assertPlanConversion(
+  //     plan, "SELECT sum(c1 * c2) as revenue FROM tmp WHERE c0 < 0.5");
+  google::protobuf::Arena arena;
+  auto substraitPlan = ToSubstrait(arena, plan2);
+  auto veloxPlan = ToVelox(substraitPlan);
+  // auto expectedQuery = "SELECT sum(c1 * c2) as revenue FROM tmp WHERE c0 < 0.5";
+  // //assertQuery(veloxPlan, expectedPlan);
+
+  std::cout << "Velox RoundTrip Plan : " << std::endl;
+  std::cout << veloxPlan->toString(true, true) << std::endl;
+  std::cout << "-------" << std::endl;
+  auto out_2 = ExecuteQuery(veloxPlan);
+
+  std::cout << std::endl << "> 2 : " << out_2->toString() << std::endl;
+  std::cout << out_2->toString(0, out_2->size()) << std::endl;
+
 }
 
 TEST_F(VeloxSubstraitRoundTripTest, avg) {
