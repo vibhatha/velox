@@ -250,7 +250,8 @@ PlanBuilder& PlanBuilder::project(const std::vector<std::string>& projections) {
   return *this;
 }
 
-PlanBuilder& PlanBuilder::substrait_project(const std::vector<std::string>& projections) {
+PlanBuilder& PlanBuilder::substrait_project(
+    const std::vector<std::string>& projections) {
   std::vector<core::TypedExprPtr> expressions;
   std::vector<std::string> projectNames;
 

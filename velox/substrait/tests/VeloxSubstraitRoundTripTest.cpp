@@ -263,12 +263,12 @@ TEST_F(VeloxSubstraitRoundTripTest, projectAs) {
   //                 .planNode();
 
   auto plan2 = PlanBuilder()
-                  .values({vectors})
-                  .filter("c0 > 5.0")
-                  .substrait_project({"c1+c2 as cx"})
-                  .partialAggregation({}, {"sum(c0)"})
-                  //.finalAggregation()
-                  .planNode();
+                   .values({vectors})
+                   .filter("c0 > 5.0")
+                   .substrait_project({"c1+c2 as cx"})
+                   .partialAggregation({}, {"sum(c0)"})
+                   //.finalAggregation()
+                   .planNode();
 
   std::cout << "Velox Plan : " << std::endl;
   std::cout << plan2->toString(true, true) << std::endl;
@@ -282,7 +282,8 @@ TEST_F(VeloxSubstraitRoundTripTest, projectAs) {
   google::protobuf::Arena arena;
   auto substraitPlan = ToSubstrait(arena, plan2);
   auto veloxPlan = ToVelox(substraitPlan);
-  // auto expectedQuery = "SELECT sum(c1 * c2) as revenue FROM tmp WHERE c0 < 0.5";
+  // auto expectedQuery = "SELECT sum(c1 * c2) as revenue FROM tmp WHERE c0 <
+  // 0.5";
   // //assertQuery(veloxPlan, expectedPlan);
 
   std::cout << "Velox RoundTrip Plan : " << std::endl;
@@ -292,7 +293,6 @@ TEST_F(VeloxSubstraitRoundTripTest, projectAs) {
 
   std::cout << std::endl << "> 2 : " << out_2->toString() << std::endl;
   std::cout << out_2->toString(0, out_2->size()) << std::endl;
-
 }
 
 TEST_F(VeloxSubstraitRoundTripTest, avg) {
