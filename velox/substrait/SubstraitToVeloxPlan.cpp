@@ -44,6 +44,52 @@ core::AggregationNode::Step toAggregationStep(
       VELOX_FAIL("Aggregate phase is not supported.");
   }
 }
+
+struct EmitInfo {
+  std::vector<core::TypedExprPtr> expressions;
+  std::vector<std::string> projectNames;
+};
+
+template <typename RelMessage>
+EmitInfo GetEmitInfo(const RelMessage& rel, const std::vector<core::TypedExprPtr>& projExprs, const std::vector<std::string>& projectNames) {
+  const auto& emit = rel.common().emit();
+  int emitSize = emit.output_mapping_size();
+  std::vector<core::TypedExprPtr> emitExpressions(emitSize);
+  std::vector<std::string> emitProjectNames(emitSize);
+  EmitInfo emit_info;
+  for (int i = 0; i < emitSize; i++) {
+    int32_t mapId = emit.output_mapping(i);
+    emitProjectNames[i] = projectNames[mapId];
+    emitExpressions[i] = projExprs[mapId];
+  }
+  emit_info.expressions = std::move(emitExpressions);
+  emit_info.projectNames = std::move(emitProjectNames);
+  return emit_info;
+}
+
+template<typename RelMessage>
+core::PlanNodePtr ProcessEmit(const RelMessage& rel, const core::PlanNodePtr& noEmitNode, const std::vector<core::TypedExprPtr>& projExprs,
+ const std::vector<std::string>& projectNames, const core::PlanNodePtr& childNode, const std::string& emit_node_id) {
+  if (rel.has_common()) {
+    switch (rel.common().emit_kind_case()) {
+      case ::substrait::RelCommon::EmitKindCase::kDirect:
+        return noEmitNode;
+      case ::substrait::RelCommon::EmitKindCase::kEmit: {
+        auto emit_info = GetEmitInfo(rel, projExprs, projectNames);
+        return std::make_shared<core::ProjectNode>(
+                    emit_node_id,
+                    std::move(emit_info.projectNames),
+                    std::move(emit_info.expressions),
+                    childNode);
+      }
+      default:
+        return nullptr;
+    }
+  } else {
+    return noEmitNode;
+  }
+}
+
 } // namespace
 
 core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
@@ -153,13 +199,13 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
   // and then add the projection expressions.
 
   // adding input node columns
-  // for (uint32_t idx = 0; idx < inputType->size(); idx++) {
-  //   const auto& field_name = inputType->nameOf(idx);
-  //   projectNames.emplace_back(field_name);
-  //   expressions.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(
-  //       inputType->childAt(idx), field_name));
-  //   colIdx++;
-  // }
+  for (uint32_t idx = 0; idx < inputType->size(); idx++) {
+    const auto& field_name = inputType->nameOf(idx);
+    projectNames.emplace_back(field_name);
+    expressions.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(
+        inputType->childAt(idx), field_name));
+    colIdx++;
+  }
 
   // adding projection columns
   for (const auto& expr : projectExprs) {
@@ -169,11 +215,13 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
     colIdx += 1;
   }
 
-  return std::make_shared<core::ProjectNode>(
+  auto noEmitNode = std::make_shared<core::ProjectNode>(
       nextPlanNodeId(),
-      std::move(projectNames),
-      std::move(expressions),
+      projectNames,
+      expressions,
       childNode);
+  
+  return ProcessEmit(projectRel, noEmitNode, std::move(expressions), std::move(projectNames), childNode, nextPlanNodeId());
 }
 
 core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(

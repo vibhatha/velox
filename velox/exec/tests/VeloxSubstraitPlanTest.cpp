@@ -99,7 +99,8 @@ void VeloxSubstraitDemo::run() {
   auto rd_plan = substraitConverter->toVeloxPlan(substraitPlan);
 
   // plan output
-  auto evenA = AssertQueryBuilder(plan).copyResults(pool());
+  auto builder = AssertQueryBuilder(plan);
+  auto evenA = builder.copyResults(pool());
 
   std::cout << std::endl << "> 1 : " << evenA->toString() << std::endl;
   std::cout << evenA->toString(0, evenA->size()) << std::endl;

@@ -94,16 +94,21 @@ class VeloxSubstraitRoundTripTest : public OperatorTestBase {
 };
 
 TEST_F(VeloxSubstraitRoundTripTest, project) {
+  // auto vectors = makeVectors(3, 4, 2);
+  // createDuckDbTable(vectors);
+  // auto projectPlan =
+  //     PlanBuilder().values(vectors).project({"c0 + c1", "c1 / c2"}).planNode();
+  // auto subsEquivalentDuckDbPlan =
+  //     "SELECT c0, c1, c2, c3, c0 + c1, c1 / c2 FROM tmp";
+  // google::protobuf::Arena arena;
+  // auto substraitPlan = ToSubstrait(arena, projectPlan);
+  // auto veloxPlan = ToVelox(substraitPlan);
+  // assertQuery(veloxPlan, subsEquivalentDuckDbPlan);
   auto vectors = makeVectors(3, 4, 2);
   createDuckDbTable(vectors);
-  auto projectPlan =
+  auto plan =
       PlanBuilder().values(vectors).project({"c0 + c1", "c1 / c2"}).planNode();
-  auto subsEquivalentDuckDbPlan =
-      "SELECT c0, c1, c2, c3, c0 + c1, c1 / c2 FROM tmp";
-  google::protobuf::Arena arena;
-  auto substraitPlan = ToSubstrait(arena, projectPlan);
-  auto veloxPlan = ToVelox(substraitPlan);
-  assertQuery(veloxPlan, subsEquivalentDuckDbPlan);
+  assertPlanConversion(plan, "SELECT c0 + c1, c1 / c2 FROM tmp");
 }
 
 TEST_F(VeloxSubstraitRoundTripTest, filter) {
@@ -250,37 +255,39 @@ TEST_F(VeloxSubstraitRoundTripTest, projectAs) {
   //      makeFlatVector<int64_t>({2499109626526694126, 2342493223442167775}),
   //      makeFlatVector<int32_t>({581869302, -133711905})});
   RowVectorPtr vectors = makeRowVector(
-      {makeFlatVector<double_t>({45.0, 55.0}),
-       makeFlatVector<int64_t>({5, 6}),
-       makeFlatVector<int32_t>({10, 20})});
+      {
+        makeFlatVector<double_t>({45.0, 55.0}),
+        makeFlatVector<int64_t>({5, 6}),
+        makeFlatVector<int32_t>({10, 20})
+       });
   createDuckDbTable({vectors});
 
-  // auto plan = PlanBuilder()
-  //                 .values({vectors})
-  //                 .filter("c0 < 0.5")
-  //                 .project({"c1 * c2 as revenue"})
-  //                 .partialAggregation({}, {"sum(revenue)"})
-  //                 .planNode();
+  auto plan = PlanBuilder()
+                  .values({vectors})
+                  .filter("c0 > 0.5")
+                  .project({"c1 * c2 as revenue1", "c1 * c2 as revenue2"})
+                  .partialAggregation({}, {"sum(revenue1)", "sum(revenue2)"})
+                  .planNode();
 
-  auto plan2 = PlanBuilder()
-                   .values({vectors})
-                   .filter("c0 > 5.0")
-                   .substrait_project({"c1+c2 as cx"})
-                   .partialAggregation({}, {"sum(c0)"})
-                   //.finalAggregation()
-                   .planNode();
+  // auto plan2 = PlanBuilder()
+  //                  .values({vectors})
+  //                  .filter("c0 > 5.0")
+  //                  .substrait_project({"c1+c2 as cx"})
+  //                  .partialAggregation({}, {"sum(c0)"})
+  //                  //.finalAggregation()
+  //                  .planNode();
 
   std::cout << "Velox Plan : " << std::endl;
-  std::cout << plan2->toString(true, true) << std::endl;
+  std::cout << plan->toString(true, true) << std::endl;
   std::cout << "-------" << std::endl;
-  auto out_1 = ExecuteQuery(plan2);
+  // auto out_1 = ExecuteQuery(plan);
 
-  std::cout << std::endl << "> 2 : " << out_1->toString() << std::endl;
-  std::cout << out_1->toString(0, out_1->size()) << std::endl;
+  // std::cout << std::endl << "> 2 : " << out_1->toString() << std::endl;
+  // std::cout << out_1->toString(0, out_1->size()) << std::endl;
   // assertPlanConversion(
   //     plan, "SELECT sum(c1 * c2) as revenue FROM tmp WHERE c0 < 0.5");
   google::protobuf::Arena arena;
-  auto substraitPlan = ToSubstrait(arena, plan2);
+  auto substraitPlan = ToSubstrait(arena, plan);
   auto veloxPlan = ToVelox(substraitPlan);
   // auto expectedQuery = "SELECT sum(c1 * c2) as revenue FROM tmp WHERE c0 <
   // 0.5";
