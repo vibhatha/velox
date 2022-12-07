@@ -309,7 +309,6 @@ TEST_F(Substrait2VeloxPlanConversionTest, substraitProject) {
   exec::test::AssertQueryBuilder(planNode).assertResults(expectedResult);
 }
 
-
 TEST_F(Substrait2VeloxPlanConversionTest, ProjectEmit) {
   std::string planPath =
       getDataFilePath("velox/substrait/tests", "data/substrait_emit.json");
@@ -320,19 +319,17 @@ TEST_F(Substrait2VeloxPlanConversionTest, ProjectEmit) {
       pool_.get());
   auto planNode = planConverter.toVeloxPlan(substraitPlan);
 
-  auto expectedResult = makeRowVector({
-      makeFlatVector<int64_t>({1000, 2000, 3000}),
-      makeFlatVector<double_t>({0.2, 0.5, 0.4}),
-      makeFlatVector<bool>({true, false, false})
-  });
+  auto expectedResult = makeRowVector(
+      {makeFlatVector<int64_t>({1000, 2000, 3000}),
+       makeFlatVector<double_t>({0.2, 0.5, 0.4}),
+       makeFlatVector<bool>({true, false, false})});
 
   exec::test::AssertQueryBuilder(planNode).assertResults(expectedResult);
 }
 
-
 TEST_F(Substrait2VeloxPlanConversionTest, NestedProjectEmit) {
-  std::string planPath =
-      getDataFilePath("velox/substrait/tests", "data/substrait_multi_project_emit.json");
+  std::string planPath = getDataFilePath(
+      "velox/substrait/tests", "data/substrait_multi_project_emit.json");
   ::substrait::Plan substraitPlan;
   JsonToProtoConverter::readFromFile(planPath, substraitPlan);
 
@@ -340,9 +337,8 @@ TEST_F(Substrait2VeloxPlanConversionTest, NestedProjectEmit) {
       pool_.get());
   auto planNode = planConverter.toVeloxPlan(substraitPlan);
 
-  auto expectedResult = makeRowVector({
-      makeFlatVector<double_t>({100, 200, 20}),
-      makeFlatVector<double_t>({100, 200, 20})
-  });
+  auto expectedResult = makeRowVector(
+      {makeFlatVector<double_t>({100, 200, 20}),
+       makeFlatVector<double_t>({100, 200, 20})});
   exec::test::AssertQueryBuilder(planNode).assertResults(expectedResult);
 }
