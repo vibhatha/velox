@@ -51,7 +51,10 @@ struct EmitInfo {
 };
 
 template <typename RelMessage>
-EmitInfo GetEmitInfo(const RelMessage& rel, const std::vector<core::TypedExprPtr>& projExprs, const std::vector<std::string>& projectNames) {
+EmitInfo GetEmitInfo(
+    const RelMessage& rel,
+    const std::vector<core::TypedExprPtr>& projExprs,
+    const std::vector<std::string>& projectNames) {
   const auto& emit = rel.common().emit();
   int emitSize = emit.output_mapping_size();
   std::vector<core::TypedExprPtr> emitExpressions(emitSize);
@@ -67,9 +70,14 @@ EmitInfo GetEmitInfo(const RelMessage& rel, const std::vector<core::TypedExprPtr
   return emit_info;
 }
 
-template<typename RelMessage>
-core::PlanNodePtr ProcessEmit(const RelMessage& rel, const core::PlanNodePtr& noEmitNode, const std::vector<core::TypedExprPtr>& projExprs,
- const std::vector<std::string>& projectNames, const core::PlanNodePtr& childNode, const std::string& emit_node_id) {
+template <typename RelMessage>
+core::PlanNodePtr ProcessEmit(
+    const RelMessage& rel,
+    const core::PlanNodePtr& noEmitNode,
+    const std::vector<core::TypedExprPtr>& projExprs,
+    const std::vector<std::string>& projectNames,
+    const core::PlanNodePtr& childNode,
+    const std::string& emit_node_id) {
   if (rel.has_common()) {
     switch (rel.common().emit_kind_case()) {
       case ::substrait::RelCommon::EmitKindCase::kDirect:
@@ -77,10 +85,10 @@ core::PlanNodePtr ProcessEmit(const RelMessage& rel, const core::PlanNodePtr& no
       case ::substrait::RelCommon::EmitKindCase::kEmit: {
         auto emit_info = GetEmitInfo(rel, projExprs, projectNames);
         return std::make_shared<core::ProjectNode>(
-                    emit_node_id,
-                    std::move(emit_info.projectNames),
-                    std::move(emit_info.expressions),
-                    childNode);
+            emit_node_id,
+            std::move(emit_info.projectNames),
+            std::move(emit_info.expressions),
+            childNode);
       }
       default:
         return nullptr;
@@ -216,12 +224,15 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
   }
 
   auto noEmitNode = std::make_shared<core::ProjectNode>(
-      nextPlanNodeId(),
-      projectNames,
-      expressions,
-      childNode);
-  
-  return ProcessEmit(projectRel, noEmitNode, std::move(expressions), std::move(projectNames), childNode, nextPlanNodeId());
+      nextPlanNodeId(), projectNames, expressions, childNode);
+
+  return ProcessEmit(
+      projectRel,
+      noEmitNode,
+      std::move(expressions),
+      std::move(projectNames),
+      childNode,
+      nextPlanNodeId());
 }
 
 core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
