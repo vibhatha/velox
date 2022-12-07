@@ -242,7 +242,8 @@ TEST_F(VeloxSubstraitRoundTripTest, rowConstructor) {
 // TEST_F(VeloxSubstraitRoundTripTest, substraitProject) {
 //   // RowVectorPtr vectors = makeRowVector(
 //   //     {makeFlatVector<double_t>({0.905791934145, 0.968867771124}),
-//   //      makeFlatVector<int64_t>({2499109626526694126, 2342493223442167775}),
+//   //      makeFlatVector<int64_t>({2499109626526694126,
+//   2342493223442167775}),
 //   //      makeFlatVector<int32_t>({581869302, -133711905})});
 //   RowVectorPtr vectors = makeRowVector(
 //       {
@@ -308,7 +309,6 @@ TEST_F(VeloxSubstraitRoundTripTest, projectAs) {
   assertPlanConversion(
       plan, "SELECT sum(c1 * c2) as revenue FROM tmp WHERE c0 < 0.5");
 }
-
 
 TEST_F(VeloxSubstraitRoundTripTest, avg) {
   auto vectors = makeVectors(2, 7, 3);

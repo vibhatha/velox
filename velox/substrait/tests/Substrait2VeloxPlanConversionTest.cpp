@@ -287,7 +287,6 @@ TEST_F(Substrait2VeloxPlanConversionTest, q6) {
       .assertResults(expectedResult);
 }
 
-
 TEST_F(Substrait2VeloxPlanConversionTest, substraitProject) {
   std::string planPath =
       getDataFilePath("velox/substrait/tests", "data/substrait_project.json");
@@ -298,18 +297,14 @@ TEST_F(Substrait2VeloxPlanConversionTest, substraitProject) {
       pool_.get());
   auto planNode = planConverter.toVeloxPlan(substraitPlan);
 
-    auto expectedResult = makeRowVector(
-        {
-        makeFlatVector<int64_t>({1000, 2000, 3000}),
-        makeFlatVector<double_t>({10.0, 20.0, 2.0}),
-        makeFlatVector<double_t>({0.2, 0.5, 0.4}),
-        makeFlatVector<bool>({true, false, false}),
-        makeFlatVector<int32_t>({10, 12, 11}),
-        makeFlatVector<double_t>({2.0, 10.0, 0.8}),
-    });
+  auto expectedResult = makeRowVector({
+      makeFlatVector<int64_t>({1000, 2000, 3000}),
+      makeFlatVector<double_t>({10.0, 20.0, 2.0}),
+      makeFlatVector<double_t>({0.2, 0.5, 0.4}),
+      makeFlatVector<bool>({true, false, false}),
+      makeFlatVector<int32_t>({10, 12, 11}),
+      makeFlatVector<double_t>({2.0, 10.0, 0.8}),
+  });
 
-    exec::test::AssertQueryBuilder(planNode).assertResults(expectedResult);
-
-       
-  
+  exec::test::AssertQueryBuilder(planNode).assertResults(expectedResult);
 }
