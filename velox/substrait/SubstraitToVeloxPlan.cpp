@@ -50,11 +50,13 @@ struct EmitInfo {
   std::vector<std::string> projectNames;
 };
 
-std::vector<core::TypedExprPtr> TypeToTypeExpression(const std::vector<std::shared_ptr<const Type>>& types, const std::vector<std::string>& names) {
-  std::vector<core::TypedExprPtr> typedExpressions; 
+std::vector<core::TypedExprPtr> TypeToTypeExpression(
+    const std::vector<std::shared_ptr<const Type>>& types,
+    const std::vector<std::string>& names) {
+  std::vector<core::TypedExprPtr> typedExpressions;
   for (uint32_t idx = 0; idx < types.size(); idx++) {
-    typedExpressions.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(
-        types[idx], names[idx]));
+    typedExpressions.emplace_back(
+        std::make_shared<core::FieldAccessTypedExpr>(types[idx], names[idx]));
   }
   return typedExpressions;
 }
@@ -415,14 +417,15 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
   }
 
   auto names = type->names();
-  auto noEmitNode = std::make_shared<core::ValuesNode>(nextPlanNodeId(), vectors);
+  auto noEmitNode =
+      std::make_shared<core::ValuesNode>(nextPlanNodeId(), vectors);
   return ProcessEmit(
-    readRel,
-    noEmitNode,
-    TypeToTypeExpression(type->children(), names),
-    std::move(names),
-    noEmitNode,
-    nextPlanNodeId());
+      readRel,
+      noEmitNode,
+      TypeToTypeExpression(type->children(), names),
+      std::move(names),
+      noEmitNode,
+      nextPlanNodeId());
 }
 
 core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
