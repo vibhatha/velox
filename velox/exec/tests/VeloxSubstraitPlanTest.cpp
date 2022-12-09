@@ -107,10 +107,10 @@ void VeloxSubstraitDemo::run() {
 
   // rd_plan output
 
-  auto rd_evenA = AssertQueryBuilder(rd_plan).copyResults(pool());
+  auto res = AssertQueryBuilder(rd_plan).copyResults(pool());
 
-  std::cout << std::endl << "> 2 : " << rd_evenA->toString() << std::endl;
-  std::cout << rd_evenA->toString(0, rd_evenA->size()) << std::endl;
+  std::cout << std::endl << "> 2 : " << res->toString() << std::endl;
+  std::cout << res->toString(0, res->size()) << std::endl;
 }
 
 int main(int argc, char** argv) {

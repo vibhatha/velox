@@ -51,7 +51,7 @@ struct EmitInfo {
 };
 
 std::vector<core::TypedExprPtr> TypeToTypeExpression(
-    const std::vector<std::shared_ptr<const Type>>& types,
+    const std::vector<TypePtr>& types,
     const std::vector<std::string>& names) {
   std::vector<core::TypedExprPtr> typedExpressions;
   for (uint32_t idx = 0; idx < types.size(); idx++) {
@@ -258,10 +258,19 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
   const auto& inputType = childNode->outputType();
   const auto& sExpr = filterRel.condition();
 
-  return std::make_shared<core::FilterNode>(
+  auto noEmitFilterNode = std::make_shared<core::FilterNode>(
       nextPlanNodeId(),
       exprConverter_->toVeloxExpr(sExpr, inputType),
       childNode);
+  auto projectNames = inputType->names();
+  auto projExprs = TypeToTypeExpression(inputType->children(), projectNames);
+  return ProcessEmit(
+    filterRel,
+    noEmitFilterNode,
+    std::move(projExprs),
+    std::move(projectNames),
+    childNode,
+    nextPlanNodeId());
 }
 
 core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
@@ -347,15 +356,23 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
         veloxTypeList[idx]);
     outNames.emplace_back(outName);
   }
+  auto names = outNames;
+  auto types = veloxTypeList;
   auto outputType = ROW(std::move(outNames), std::move(veloxTypeList));
 
   if (readRel.has_virtual_table()) {
     return toVeloxPlan(readRel, outputType);
-
   } else {
+    // handle emit
     auto tableScanNode = std::make_shared<core::TableScanNode>(
         nextPlanNodeId(), outputType, tableHandle, assignments);
-    return tableScanNode;
+    return ProcessEmit(
+      readRel,
+      tableScanNode,
+      TypeToTypeExpression(types, names),
+      outNames,
+      tableScanNode,
+      nextPlanNodeId());
   }
 }
 

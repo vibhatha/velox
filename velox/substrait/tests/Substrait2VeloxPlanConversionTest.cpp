@@ -379,3 +379,23 @@ TEST_F(Substrait2VeloxPlanConversionTest, ReadRelWithEmit) {
   });
   exec::test::AssertQueryBuilder(planNode).assertResults(expectedResult);
 }
+
+TEST_F(Substrait2VeloxPlanConversionTest, FilterRelWithEmit) {
+  std::string planPath =
+      getDataFilePath("velox/substrait/tests", "data/substrait_filter_emit.json");
+  ::substrait::Plan substraitPlan;
+  JsonToProtoConverter::readFromFile(planPath, substraitPlan);
+
+  facebook::velox::substrait::SubstraitVeloxPlanConverter planConverter(
+      pool_.get());
+  auto planNode = planConverter.toVeloxPlan(substraitPlan);
+
+  auto expectedResult = makeRowVector({
+      makeFlatVector<int64_t>({1000, 3000}),
+      makeFlatVector<double_t>({10.0, 2.0}),
+      makeFlatVector<double_t>({0.2, 0.4}),
+      makeFlatVector<bool>({true, false}),
+      makeFlatVector<int32_t>({10, 11}),
+  });
+  exec::test::AssertQueryBuilder(planNode).assertResults(expectedResult);
+}
