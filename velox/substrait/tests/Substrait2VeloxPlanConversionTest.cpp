@@ -381,8 +381,8 @@ TEST_F(Substrait2VeloxPlanConversionTest, ReadRelWithEmit) {
 }
 
 TEST_F(Substrait2VeloxPlanConversionTest, FilterRelWithEmit) {
-  std::string planPath =
-      getDataFilePath("velox/substrait/tests", "data/substrait_filter_emit.json");
+  std::string planPath = getDataFilePath(
+      "velox/substrait/tests", "data/substrait_filter_emit.json");
   ::substrait::Plan substraitPlan;
   JsonToProtoConverter::readFromFile(planPath, substraitPlan);
 
@@ -401,8 +401,8 @@ TEST_F(Substrait2VeloxPlanConversionTest, FilterRelWithEmit) {
 }
 
 TEST_F(Substrait2VeloxPlanConversionTest, AggRelWithEmit) {
-  std::string planPath =
-      getDataFilePath("velox/substrait/tests", "data/substrait_aggregate_emit.json");
+  std::string planPath = getDataFilePath(
+      "velox/substrait/tests", "data/substrait_aggregate_emit.json");
   ::substrait::Plan substraitPlan;
   JsonToProtoConverter::readFromFile(planPath, substraitPlan);
 
