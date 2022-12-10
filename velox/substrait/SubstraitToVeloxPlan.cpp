@@ -87,7 +87,6 @@ core::PlanNodePtr ProcessEmit(
     const core::PlanNodePtr& noEmitNode,
     const std::vector<core::TypedExprPtr>& projExprs,
     const std::vector<std::string>& projectNames,
-    const core::PlanNodePtr& childNode,
     const std::string& emit_node_id) {
   if (rel.has_common()) {
     switch (rel.common().emit_kind_case()) {
@@ -99,7 +98,7 @@ core::PlanNodePtr ProcessEmit(
             emit_node_id,
             std::move(emit_info.projectNames),
             std::move(emit_info.expressions),
-            childNode);
+            noEmitNode);
       }
       default:
         return nullptr;
@@ -122,13 +121,17 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
   core::AggregationNode::Step aggStep = toAggregationStep(aggRel);
   const auto& inputType = childNode->outputType();
   std::vector<core::FieldAccessTypedExprPtr> veloxGroupingExprs;
+  
+  // TODO: Vibhatha: We have to figure out a way to retrieve the index of 
+  // the inputType which was extracted as an expression. One idea is to return a tuple
+  // when the exprConverter is called. The pair could be <index_in_input_type, expr>
 
   // Get the grouping expressions.
   for (const auto& grouping : aggRel.groupings()) {
     for (const auto& groupingExpr : grouping.grouping_expressions()) {
       // Velox's groupings are limited to be Field.
-      veloxGroupingExprs.emplace_back(
-          exprConverter_->toVeloxExpr(groupingExpr.selection(), inputType));
+      auto groupExpr = exprConverter_->toVeloxExpr(groupingExpr.selection(), inputType);
+      veloxGroupingExprs.emplace_back(std::move(groupExpr));
     }
   }
 
@@ -179,11 +182,12 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
   for (int idx = veloxGroupingExprs.size();
        idx < veloxGroupingExprs.size() + aggRel.measures().size();
        idx++) {
-    aggOutNames.emplace_back(substraitParser_->makeNodeName(planNodeId_, idx));
+    auto aggOutName = substraitParser_->makeNodeName(planNodeId_, idx);
+    aggOutNames.emplace_back(aggOutName);
   }
 
-  // Create Aggregate node.
-  return std::make_shared<core::AggregationNode>(
+  // create Aggregate node.
+  auto noEmitAggNode = std::make_shared<core::AggregationNode>(
       nextPlanNodeId(),
       aggStep,
       veloxGroupingExprs,
@@ -193,6 +197,25 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
       aggregateMasks,
       ignoreNullKeys,
       childNode);
+
+  // create output expressions and names
+  std::vector<core::TypedExprPtr> outputTypeExprs;
+  size_t outputSize = veloxGroupingExprs.size() + aggExprs.size();
+  outputTypeExprs.reserve(outputSize);
+  auto emitInputType = noEmitAggNode->outputType();
+  VELOX_CHECK_EQ(outputSize, noEmitAggNode->outputType()->size());
+
+  for(size_t idx=0; idx < outputSize; idx++) {
+    outputTypeExprs.emplace_back(std::make_shared<core::FieldAccessTypedExpr>(
+         emitInputType->childAt(idx), emitInputType->nameOf(idx)));
+  }  
+
+  return ProcessEmit(
+    aggRel,
+    noEmitAggNode,
+    std::move(outputTypeExprs),
+    emitInputType->names(),
+    nextPlanNodeId());
 }
 
 core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
@@ -242,7 +265,6 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
       noEmitNode,
       std::move(expressions),
       std::move(projectNames),
-      childNode,
       nextPlanNodeId());
 }
 
@@ -269,7 +291,6 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
     noEmitFilterNode,
     std::move(projExprs),
     std::move(projectNames),
-    childNode,
     nextPlanNodeId());
 }
 
@@ -371,7 +392,6 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
       tableScanNode,
       TypeToTypeExpression(types, names),
       outNames,
-      tableScanNode,
       nextPlanNodeId());
   }
 }
@@ -441,7 +461,6 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
       noEmitNode,
       TypeToTypeExpression(type->children(), names),
       std::move(names),
-      noEmitNode,
       nextPlanNodeId());
 }
 
