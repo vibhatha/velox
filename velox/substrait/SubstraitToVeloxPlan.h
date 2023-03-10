@@ -27,6 +27,9 @@ class SubstraitVeloxPlanConverter {
  public:
   explicit SubstraitVeloxPlanConverter(memory::MemoryPool* pool)
       : pool_(pool) {}
+
+  virtual ~SubstraitVeloxPlanConverter() = default;
+
   struct SplitInfo {
     /// The Partition index.
     u_int32_t partitionIndex;
@@ -45,42 +48,42 @@ class SubstraitVeloxPlanConverter {
   };
 
   /// Convert Substrait AggregateRel into Velox PlanNode.
-  core::PlanNodePtr toVeloxPlan(const ::substrait::AggregateRel& aggRel);
+  virtual core::PlanNodePtr toVeloxPlan(const ::substrait::AggregateRel& aggRel);
 
   /// Convert Substrait ProjectRel into Velox PlanNode.
-  core::PlanNodePtr toVeloxPlan(const ::substrait::ProjectRel& projectRel);
+  virtual core::PlanNodePtr toVeloxPlan(const ::substrait::ProjectRel& projectRel);
 
   /// Convert Substrait FilterRel into Velox PlanNode.
-  core::PlanNodePtr toVeloxPlan(const ::substrait::FilterRel& filterRel);
+  virtual core::PlanNodePtr toVeloxPlan(const ::substrait::FilterRel& filterRel);
 
   /// Convert Substrait ReadRel into Velox PlanNode.
   /// Index: the index of the partition this item belongs to.
   /// Starts: the start positions in byte to read from the items.
   /// Lengths: the lengths in byte to read from the items.
-  core::PlanNodePtr toVeloxPlan(
+  virtual core::PlanNodePtr toVeloxPlan(
       const ::substrait::ReadRel& readRel,
       std::shared_ptr<SplitInfo>& splitInfo);
 
   /// Convert Substrait FetchRel into Velox LimitNode or TopNNode according the
   /// different input of fetchRel.
-  core::PlanNodePtr toVeloxPlan(const ::substrait::FetchRel& fetchRel);
+  virtual core::PlanNodePtr toVeloxPlan(const ::substrait::FetchRel& fetchRel);
 
   /// Convert Substrait ReadRel into Velox Values Node.
-  core::PlanNodePtr toVeloxPlan(
+  virtual core::PlanNodePtr toVeloxPlan(
       const ::substrait::ReadRel& readRel,
       const RowTypePtr& type);
 
   /// Convert Substrait Rel into Velox PlanNode.
-  core::PlanNodePtr toVeloxPlan(const ::substrait::Rel& rel);
+  virtual core::PlanNodePtr toVeloxPlan(const ::substrait::Rel& rel);
 
   /// Convert Substrait RelRoot into Velox PlanNode.
-  core::PlanNodePtr toVeloxPlan(const ::substrait::RelRoot& root);
+  virtual core::PlanNodePtr toVeloxPlan(const ::substrait::RelRoot& root);
 
   /// Convert Substrait SortRel into Velox OrderByNode.
-  core::PlanNodePtr toVeloxPlan(const ::substrait::SortRel& sortRel);
+  virtual core::PlanNodePtr toVeloxPlan(const ::substrait::SortRel& sortRel);
 
   /// Convert Substrait Plan into Velox PlanNode.
-  core::PlanNodePtr toVeloxPlan(const ::substrait::Plan& substraitPlan);
+  virtual core::PlanNodePtr toVeloxPlan(const ::substrait::Plan& substraitPlan);
 
   /// Check the Substrait type extension only has one unknown extension.
   bool checkTypeExtension(const ::substrait::Plan& substraitPlan);
