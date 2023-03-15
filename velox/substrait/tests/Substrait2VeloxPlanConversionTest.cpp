@@ -286,3 +286,106 @@ TEST_F(Substrait2VeloxPlanConversionTest, q6) {
       .splits(makeSplits(planConverter, planNode))
       .assertResults(expectedResult);
 }
+
+TEST_F(Substrait2VeloxPlanConversionTest, groupByNoAggregateWithConsumer) {
+  auto a = makeFlatVector<int32_t>({14, 11, 11, 10, 14, 13, 11, 12});
+  auto b = makeFlatVector<double_t>({0.3, 0.4, 0.2, 0.1, 0.3, 0.4, 0.2, 0.1});
+  auto c = makeFlatVector<Date>({Date(8036), Date(8035), Date(8036), Date(8035), Date(8036), Date(8035), Date(8036), Date(8035)});
+
+  auto vectors = makeRowVector({"a", "b", "c"}, {a, b, c});
+  
+  std::cout << std::endl
+            << "> : original"
+            << vectors->toString() << std::endl;
+  std::cout << vectors->toString(0, 10) << std::endl;
+
+  createDuckDbTable({vectors});
+
+  auto planFragment = facebook::velox::exec::test::PlanBuilder()
+                  .values({vectors})
+                  .singleAggregation({"a"}, {})
+                  .planFragment();
+
+  std::cout << "planFragment.groupedExecutionLeafNodeIds: " << planFragment.groupedExecutionLeafNodeIds.size() << std::endl;
+
+  std::atomic_int output_cnt{0};
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      ++output_cnt;
+      std::cout << std::endl
+            << "> : output"
+            << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+
+      auto copy =
+      BaseVector::create<RowVector>(output->type(), output->size(), pool_.get());
+      copy->copy(output.get(), 0, 0, output->size());
+      std::cout << std::endl
+            << "> : copy"
+            << copy->toString() << std::endl;
+      std::cout << copy->toString(0, 10) << std::endl;
+
+      auto static_copy = BaseVector::copy(*output);
+      std::cout << std::endl
+            << "> : static_copy"
+            << static_copy->toString() << std::endl;
+      std::cout << static_copy->toString(0, 10) << std::endl;
+
+      DecodedVector decodedSource(*output, false);
+
+      auto decodedRowVec = decodedSource.base()->as<RowVector>();
+
+      auto rwc = decodedRowVec->childAt(0)->loadedVector();
+      std::cout << std::endl
+            << "> : rwc"
+            << rwc->toString() << std::endl;
+      std::cout << rwc->toString(0, 10) << std::endl;
+
+      std::cout << std::endl
+            << "> : decoded"
+            << decodedRowVec->toString() << std::endl;
+      std::cout << decodedRowVec->toString(0, 10) << std::endl;
+
+      std::cout << "Encoding : " << output->encoding() << std::endl;
+      auto child = output->childAt(0);
+      std::cout << "Child Encoding : " << child->encoding() << std::endl;
+      std::cout << child->toString(0, 10) << std::endl;
+      std::cout << "Value Vector " << std::endl;
+      std::cout << child->valueVector()->toString(0,10) << std::endl;
+      std::cout << "wrappedVector() " << std::endl;
+      std::cout << child->wrappedVector()->toString(0,10) << std::endl;
+      std::cout << "typeKind() : " << child->typeKind() << std::endl;
+      //std::cout << "valueAt : " <<child->values(0) << std::endl;
+      auto dictVec = std::dynamic_pointer_cast<DictionaryVector<int32_t>>(output->childAt(0));
+      size_t numGroups = dictVec->size();
+      std::cout << "Num Groups : " << numGroups << std::endl;
+      for (size_t ix=0; ix < numGroups; ix++) {
+        auto wrappedIndex = dictVec->wrappedIndex(ix);
+        std::cout << "Index : " << wrappedIndex << std::endl;
+        std::cout << "Group Value (" << ix << ") : " << dictVec->valueAt(ix) << std::endl;
+      }
+      
+
+      
+
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+  
+  auto groupByTask = std::make_shared<facebook::velox::exec::Task>(
+      "my_groupby_task", planFragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  //groupByTask->noMoreSplits();
+
+  facebook::velox::exec::Task::start(groupByTask, 1);
+
+  while (groupByTask->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
