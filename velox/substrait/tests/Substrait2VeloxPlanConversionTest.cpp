@@ -287,6 +287,33 @@ TEST_F(Substrait2VeloxPlanConversionTest, q6) {
       .assertResults(expectedResult);
 }
 
+template <class CType>
+std::optional<std::shared_ptr<facebook::velox::RowVector>> FromDictionaryVector(const std::shared_ptr<facebook::velox::RowVector>& output) {
+  for(size_t i=0; i < output->childrenSize(); i++) {
+    std::cout << "Encoding : " << output->encoding() << std::endl;
+    auto child = output->childAt(i);
+    std::cout << "Child Encoding : " << child->encoding() << std::endl;
+    if(child->encoding() == VectorEncoding::Simple::Dictionary) {
+        std::cout << "True" << std::endl;
+    }
+    std::cout << child->toString(0, 10) << std::endl;
+    std::cout << "Value Vector " << std::endl;
+    std::cout << child->valueVector()->toString(0,10) << std::endl;
+    std::cout << "wrappedVector() " << std::endl;
+    std::cout << child->wrappedVector()->toString(0,10) << std::endl;
+    std::cout << "typeKind() : " << child->typeKind() << std::endl;
+    //std::cout << "valueAt : " <<child->values(0) << std::endl;
+    auto dictVec = std::dynamic_pointer_cast<DictionaryVector<CType>>(child);
+    size_t numGroups = dictVec->size();
+    std::cout << "Num Groups : " << numGroups << std::endl;
+    for (size_t ix=0; ix < numGroups; ix++) {
+     auto wrappedIndex = dictVec->wrappedIndex(ix);
+     std::cout << "Index : " << wrappedIndex << std::endl;
+     std::cout << "Group Value (" << ix << ") : " << dictVec->valueAt(ix) << std::endl;
+    }
+  }
+}
+
 TEST_F(Substrait2VeloxPlanConversionTest, groupByNoAggregateWithConsumer) {
   auto a = makeFlatVector<int32_t>({14, 11, 11, 10, 14, 13, 11, 12});
   auto b = makeFlatVector<double_t>({0.3, 0.4, 0.2, 0.1, 0.3, 0.4, 0.2, 0.1});
@@ -366,10 +393,6 @@ TEST_F(Substrait2VeloxPlanConversionTest, groupByNoAggregateWithConsumer) {
         std::cout << "Index : " << wrappedIndex << std::endl;
         std::cout << "Group Value (" << ix << ") : " << dictVec->valueAt(ix) << std::endl;
       }
-      
-
-      
-
     }
     return facebook::velox::exec::BlockingReason::kNotBlocked;
   };
