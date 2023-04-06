@@ -573,5 +573,431 @@ TEST_F(SumTest, floatAggregateOverflow) {
   testAggregateOverflow<double, double>();
 }
 
+TEST_F(SumTest, sum0NoNull) {
+  auto a_vec = makeFlatVector<int32_t>({14, 11, 11, 10, 14, 13, 11, 12});
+  auto b_vec = makeFlatVector<int32_t>({1, 2, 3, 4, 5, 6, 7, 8});
+  auto c_vec = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment = PlanBuilder()
+           .values({row_vecs})
+           .singleAggregation(
+               {"c0"}, {"sum(c1)"})
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0Null) {
+  auto a_vec = makeFlatVector<int32_t>({14, 11, 11, 10, 14, 13, 11, 12});
+  auto b_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL});
+  auto c_vec = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment = PlanBuilder()
+           .values({row_vecs})
+           .singleAggregation(
+               {"c0"}, {"sum(c1)"})
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0Empty) { // this doesn't work
+  auto a_vec = makeFlatVector<int32_t>({14, 11, 11, 10, 14, 13, 11, 12});
+  auto b_vec = makeFlatVector<int32_t>({});
+  auto c_vec = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment = PlanBuilder()
+           .values({row_vecs})
+           .singleAggregation(
+               {"c0"}, {"sum(c1)"})
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0NullKey) {
+  auto a_vec = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
+  auto b_vec = makeFlatVector<int32_t>({1, NULL, 2, NULL, 2, NULL, NULL, 3});
+  auto c_vec = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment = PlanBuilder()
+           .values({row_vecs})
+           .singleAggregation(
+               {"c0"}, {"sum(c1)"})
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0NullIgnoreNullKeys) {
+  auto a_vec = makeFlatVector<int32_t>({14, 11, 11, 10, 14, 13, 11, 12});
+  auto b_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL});
+  auto c_vec = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment = PlanBuilder()
+           .values({row_vecs})
+           .aggregation(
+               {"c0"}, {"sum(c1)"}, {}, facebook::velox::core::AggregationNode::Step::kSingle, true)
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0EmptyNoGroupByIgnoreNullKeys) {
+  auto a_vec = makeFlatVector<int32_t>({});
+  auto b_vec = makeFlatVector<int32_t>({});
+  auto c_vec = makeFlatVector<StringView>({});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment = PlanBuilder()
+           .values({row_vecs})
+           .aggregation(
+               {}, {"sum(c1)"}, {}, facebook::velox::core::AggregationNode::Step::kSingle, true)
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0EmptyNoGroupBy) {
+  auto a_vec = makeFlatVector<int32_t>({});
+  auto b_vec = makeFlatVector<int32_t>({});
+  auto c_vec = makeFlatVector<StringView>({});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment = PlanBuilder()
+           .values({row_vecs})
+           .aggregation(
+               {}, {"sum(c1)"}, {}, facebook::velox::core::AggregationNode::Step::kSingle, false)
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0NullKeyIgnoreNullKeys) {
+  auto a_vec = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
+  auto b_vec = makeFlatVector<int32_t>({1, NULL, 2, NULL, 2, NULL, NULL, 3});
+  auto c_vec = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment = PlanBuilder()
+           .values({row_vecs})
+           .aggregation(
+               {"c0"}, {"sum(c1)"}, {}, facebook::velox::core::AggregationNode::Step::kSingle, true)
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0NullKeyIgnoreNullKeysWithJoin) {
+  auto a_vec_l = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
+  auto b_vec_l = makeFlatVector<int32_t>({1, NULL, 2, NULL, 2, NULL, NULL, 3});
+  auto c_vec_l = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto a_vec_r = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
+  auto b_vec_r = makeFlatVector<int32_t>({10, NULL, 20, NULL, 30, NULL, NULL, 40});
+  auto c_vec_r = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto row_vecs_l = makeRowVector({"c0_l", "c1_l", "c2_l"}, {a_vec_l, b_vec_l, c_vec_l});
+  auto row_vecs_r = makeRowVector({"c0_r", "c1_r", "c2_r"}, {a_vec_r, b_vec_r, c_vec_r});
+
+  auto lg = std::make_shared<facebook::velox::core::PlanNodeIdGenerator>();
+  core::PlanNodeId lId;
+  core::PlanNodeId rId;
+  auto group_by_fragment = PlanBuilder(lg)
+           .values({row_vecs_l})
+           .capturePlanNodeId(lId)
+           .aggregation(
+               {"c0_l"}, {"sum(c1_l)"}, {}, facebook::velox::core::AggregationNode::Step::kSingle, true)
+           .hashJoin(
+             {"c0_l"},
+             {"c0_r"},
+             PlanBuilder(lg)
+                 .values({row_vecs_r})
+                 .capturePlanNodeId(rId)
+                 .planNode(), 
+            "",
+            {"c0_l", "a0", "c0_r", "c1_r", "c2_r"})
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sum0NullKeyWithJoin) {
+  auto a_vec_l = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
+  auto b_vec_l = makeFlatVector<int32_t>({1, NULL, 2, NULL, 2, NULL, NULL, 3});
+  auto c_vec_l = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto a_vec_r = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
+  auto b_vec_r = makeFlatVector<int32_t>({10, NULL, 20, NULL, 30, NULL, NULL, 40});
+  auto c_vec_r = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
+    StringView("1"), StringView("4"), StringView("2"), StringView("5")});
+
+  auto row_vecs_l = makeRowVector({"c0_l", "c1_l", "c2_l"}, {a_vec_l, b_vec_l, c_vec_l});
+  auto row_vecs_r = makeRowVector({"c0_r", "c1_r", "c2_r"}, {a_vec_r, b_vec_r, c_vec_r});
+
+  auto lg = std::make_shared<facebook::velox::core::PlanNodeIdGenerator>();
+  core::PlanNodeId lId;
+  core::PlanNodeId rId;
+  auto group_by_fragment = PlanBuilder(lg)
+           .values({row_vecs_l})
+           .capturePlanNodeId(lId)
+           .aggregation(
+               {"c0_l"}, {"sum(c1_l)"}, {}, facebook::velox::core::AggregationNode::Step::kSingle, false)
+           .hashJoin(
+             {"c0_l"},
+             {"c0_r"},
+             PlanBuilder(lg)
+                 .values({row_vecs_r})
+                 .capturePlanNodeId(rId)
+                 .planNode(), 
+            "",
+            {"c0_l", "a0", "c0_r", "c1_r", "c2_r"})
+           .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*) -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      std::cout << output->toString() << std::endl;
+      std::cout << output->toString(0, 10) << std::endl;
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task", group_by_fragment, 0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()), consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
 } // namespace
 } // namespace facebook::velox::aggregate::test
