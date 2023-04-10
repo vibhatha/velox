@@ -889,8 +889,8 @@ TEST_F(SumTest, sum0NullKeyIgnoreNullKeysWithJoin) {
   auto c_vec_l = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
     StringView("1"), StringView("4"), StringView("2"), StringView("5")});
 
-  auto a_vec_r = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
-  auto b_vec_r = makeFlatVector<int32_t>({10, NULL, 20, NULL, 30, NULL, NULL, 40});
+  auto a_vec_r = makeFlatVector<int32_t>({NULL, 11, 50, 10, NULL, 12, 11, NULL});
+  auto b_vec_r = makeFlatVector<int32_t>({10, NULL, 20, NULL, NULL, NULL, 30, 40});
   auto c_vec_r = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
     StringView("1"), StringView("4"), StringView("2"), StringView("5")});
 
@@ -942,13 +942,13 @@ TEST_F(SumTest, sum0NullKeyIgnoreNullKeysWithJoin) {
 }
 
 TEST_F(SumTest, sum0NullKeyWithJoin) {
-  auto a_vec_l = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
+  auto a_vec_r = makeFlatVector<int32_t>({NULL, 11, 50, 10, NULL, 12, 11, NULL});
   auto b_vec_l = makeFlatVector<int32_t>({1, NULL, 2, NULL, 2, NULL, NULL, 3});
   auto c_vec_l = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
     StringView("1"), StringView("4"), StringView("2"), StringView("5")});
 
   auto a_vec_r = makeFlatVector<int32_t>({NULL, 11, 11, 10, NULL, 13, 11, NULL});
-  auto b_vec_r = makeFlatVector<int32_t>({10, NULL, 20, NULL, 30, NULL, NULL, 40});
+  auto b_vec_r = makeFlatVector<int32_t>({10, NULL, 20, NULL, NULL, NULL, 30, 40});
   auto c_vec_r = makeFlatVector<StringView>({StringView("1"), StringView("2"), StringView("2"), StringView("3"), 
     StringView("1"), StringView("4"), StringView("2"), StringView("5")});
 
