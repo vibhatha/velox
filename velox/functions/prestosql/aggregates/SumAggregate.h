@@ -193,6 +193,21 @@ class DecimalSumAggregate
   }
 };
 
+template <typename TInput, typename TAccumulator, typename ResultType>
+class SumAggregateTest : public SumAggregate<TInput, TAccumulator, ResultType> {
+  using BaseAggregate =
+      SimpleNumericAggregate<TInput, TAccumulator, ResultType>;
+
+ public:
+  explicit SumAggregateTest(TypePtr resultType) : SumAggregate(resultType) {}
+
+  void initializeNewGroups(
+      char** groups,
+      folly::Range<const vector_size_t*> indices) override {
+    exec::Aggregate::setAllNulls(groups, indices);
+  }
+};
+
 template <template <typename U, typename V, typename W> class T>
 bool registerSum(const std::string& name) {
   std::vector<std::shared_ptr<exec::AggregateFunctionSignature>> signatures{
