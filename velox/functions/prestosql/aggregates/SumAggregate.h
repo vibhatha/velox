@@ -193,18 +193,89 @@ class DecimalSumAggregate
   }
 };
 
+// template <typename TInput, typename TAccumulator, typename ResultType>
+// class SumAggregateTest : public SumAggregate<TInput, TAccumulator, ResultType> {
+//   using BaseAggregate =
+//       SumAggregate<TInput, TAccumulator, ResultType>;
+
+//  public:
+//   explicit SumAggregateTest(TypePtr resultType) : BaseAggregate(resultType) {}
+
+//   void initializeNewGroups(
+//       char** groups,
+//       folly::Range<const vector_size_t*> indices) override {
+//     // for (auto i : indices) {
+//     //   //exec::Aggregate::setNull(groups[i]);
+//     //   *exec::Aggregate::value<TAccumulator>(groups[i]) = 0;
+//     // }
+//     exec::Aggregate::setAllNulls(groups, indices);
+//     for (auto i : indices) {
+//       *exec::Aggregate::value<TAccumulator>(groups[i]) = 0;
+//     }
+//   }
+// };
+
 template <typename TInput, typename TAccumulator, typename ResultType>
-class SumAggregateTest : public SumAggregate<TInput, TAccumulator, ResultType> {
+class Sum0Aggregate
+    : public SumAggregate<TInput, TAccumulator, ResultType> {
   using BaseAggregate =
-      SimpleNumericAggregate<TInput, TAccumulator, ResultType>;
+      SumAggregate<TInput, TAccumulator, ResultType>;
 
  public:
-  explicit SumAggregateTest(TypePtr resultType) : SumAggregate(resultType) {}
+  explicit Sum0Aggregate(TypePtr resultType) : BaseAggregate(resultType) {}
 
-  void initializeNewGroups(
+  void extractValues(char** groups, int32_t numGroups, VectorPtr* result)
+      override {
+    doExtractValues<ResultType>(
+        groups, numGroups, result, [&](char* group) {
+          // 'ResultType' and 'TAccumulator' might not be same such as sum(real)
+          // and we do an explicit type conversion here.
+          return (ResultType)(*BaseAggregate::Aggregate::template value<
+                              TAccumulator>(group));
+        });
+  }
+
+  void extractAccumulators(char** groups, int32_t numGroups, VectorPtr* result)
+      override {
+    doExtractValues<TAccumulator>(
+        groups, numGroups, result, [&](char* group) {
+          return *BaseAggregate::Aggregate::template value<TAccumulator>(group);
+        });
+  }
+
+ protected:
+
+  template <typename TData = ResultType, typename ExtractOneValue>
+  void doExtractValues(
       char** groups,
-      folly::Range<const vector_size_t*> indices) override {
-    exec::Aggregate::setAllNulls(groups, indices);
+      int32_t numGroups,
+      VectorPtr* result,
+      ExtractOneValue extractOneValue) {
+    VELOX_CHECK_EQ((*result)->encoding(), VectorEncoding::Simple::FLAT);
+    auto vector = (*result)->as<FlatVector<TData>>();
+    VELOX_CHECK(
+        vector,
+        "Unexpected type of the result vector: {}",
+        (*result)->type()->toString());
+    VELOX_CHECK_EQ(vector->elementSize(), sizeof(TData));
+    vector->resize(numGroups);
+    uint64_t* rawNulls = exec::Aggregate::getRawNulls(vector);
+    if constexpr (std::is_same_v<TData, bool>) {
+      uint64_t* rawValues = vector->template mutableRawValues<uint64_t>();
+      for (int32_t i = 0; i < numGroups; ++i) {
+        char* group = groups[i];
+        exec::Aggregate::clearNull(rawNulls, i);
+        bits::setBit(rawValues, i, extractOneValue(group));
+        
+      }
+    } else {
+      TData* rawValues = vector->mutableRawValues();
+      for (int32_t i = 0; i < numGroups; ++i) {
+        char* group = groups[i];
+        exec::Aggregate::clearNull(rawNulls, i);
+        rawValues[i] = extractOneValue(group);
+      }
+    }
   }
 };
 
