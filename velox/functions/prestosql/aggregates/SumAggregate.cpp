@@ -21,6 +21,7 @@ namespace facebook::velox::aggregate::prestosql {
 void registerSumAggregate(const std::string& prefix) {
   registerSum<SumAggregate>(prefix + kSum);
   registerSum<Sum0Aggregate>(prefix + kSum0);
+  registerSum<SumNullAggregate>(prefix + kSumNull);
 }
 
 } // namespace facebook::velox::aggregate::prestosql

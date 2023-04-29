@@ -54,4 +54,5 @@ const char* const kVarSamp = "var_samp";
 const char* const kMaxSizeForStats = "max_data_size_for_stats";
 /// TODO: remove
 const char* const kSum0 = "sum0";
+const char* const kSumNull = "sum_null";
 } // namespace facebook::velox::aggregate
