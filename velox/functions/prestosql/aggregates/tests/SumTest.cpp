@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <limits>
+
 #include "velox/common/base/tests/GTestUtils.h"
 #include "velox/exec/AggregationHook.h"
 #include "velox/exec/tests/utils/AssertQueryBuilder.h"
@@ -24,8 +26,16 @@
 #include "velox/functions/prestosql/CheckedArithmeticImpl.h"
 #include "velox/functions/prestosql/aggregates/SumAggregate.h"
 
+#include "velox/exec/Aggregate.h"
+#include "velox/exec/AggregationHook.h"
+#include "velox/expression/FunctionSignature.h"
+#include "velox/functions/prestosql/aggregates/AggregateNames.h"
+#include "velox/functions/prestosql/aggregates/SimpleNumericAggregate.h"
+#include "velox/functions/prestosql/aggregates/SingleValueAccumulator.h"
+
 using facebook::velox::exec::test::PlanBuilder;
 using namespace facebook::velox::exec::test;
+using namespace facebook::velox::aggregate::prestosql;
 
 namespace facebook::velox::aggregate::test {
 
@@ -218,6 +228,724 @@ class SumNullAggregateTest
   }
 };
 
+template <typename ResultType>
+struct SumTrait : public std::numeric_limits<ResultType> {};
+
+template <typename TInput, typename TAccumulator, typename ResultType>
+class SumNullableAggregateTest
+    : public facebook::velox::aggregate::prestosql::
+          SumAggregate<TInput, TAccumulator, ResultType> {
+  using BaseAggregate = facebook::velox::aggregate::prestosql::
+      SumAggregate<TInput, TAccumulator, ResultType>;
+
+ public:
+  explicit SumNullableAggregateTest(TypePtr resultType)
+      : BaseAggregate(resultType) {}
+
+  void initializeNewGroups(
+      char** groups,
+      folly::Range<const vector_size_t*> indices) override {
+    exec::Aggregate::setAllNulls(groups, indices);
+    for (auto i : indices) {
+      *exec::Aggregate::value<TAccumulator>(groups[i]) = kInitialValue_;
+    }
+  }
+
+  void extractValues(char** groups, int32_t numGroups, VectorPtr* result)
+      override {
+    doExtractValues<ResultType>(groups, numGroups, result, [&](char* group) {
+      // 'ResultType' and 'TAccumulator' might not be same such as sum(real)
+      // and we do an explicit type conversion here.
+      return (
+          ResultType)(*BaseAggregate::Aggregate::template value<TAccumulator>(
+          group));
+    });
+  }
+
+  void extractAccumulators(char** groups, int32_t numGroups, VectorPtr* result)
+      override {
+    doExtractValues<TAccumulator>(groups, numGroups, result, [&](char* group) {
+      return *BaseAggregate::Aggregate::template value<TAccumulator>(group);
+    });
+  }
+
+  void addRawInput(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    updateInternal<TAccumulator>(groups, rows, args, mayPushdown);
+  }
+
+  void addIntermediateResults(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    updateInternal<TAccumulator, TAccumulator>(groups, rows, args, mayPushdown);
+  }
+
+  void addSingleGroupRawInput(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    BaseAggregate::template updateOneGroup<TAccumulator>(
+        group,
+        rows,
+        args[0],
+        &updateSingleValue<TAccumulator>,
+        &updateDuplicateValues<TAccumulator>,
+        mayPushdown,
+        kInitialValue_);
+  }
+
+  void addSingleGroupIntermediateResults(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    BaseAggregate::template updateOneGroup<TAccumulator, TAccumulator>(
+        group,
+        rows,
+        args[0],
+        &updateSingleValue<TAccumulator>,
+        &updateDuplicateValues<TAccumulator>,
+        mayPushdown,
+        kInitialValue_);
+  }
+
+ protected:
+  template <typename TData = ResultType, typename ExtractOneValue>
+  void doExtractValues(
+      char** groups,
+      int32_t numGroups,
+      VectorPtr* result,
+      ExtractOneValue extractOneValue) {
+    VELOX_CHECK_EQ((*result)->encoding(), VectorEncoding::Simple::FLAT);
+    // NOTE: Here Vector stores the groupby values for each group
+    //  We need to figure out a way to determine if all values are null it
+    //  should put nulls and if empty it should put nulls. We need to figure out
+    //  where that part is executed.
+    auto vector = (*result)->as<FlatVector<TData>>();
+    VELOX_CHECK(
+        vector,
+        "Unexpected type of the result vector: {}",
+        (*result)->type()->toString());
+    VELOX_CHECK_EQ(vector->elementSize(), sizeof(TData));
+    vector->resize(numGroups);
+    for (int32_t i = 0; i < numGroups; ++i) {
+      vector->setNull(i, true);
+    }
+    uint64_t* rawNulls = exec::Aggregate::getRawNulls(vector);
+    if constexpr (std::is_same_v<TData, bool>) {
+      uint64_t* rawValues = vector->template mutableRawValues<uint64_t>();
+      for (int32_t i = 0; i < numGroups; ++i) {
+        char* group = groups[i];
+        if (exec::Aggregate::isNull(group)) {
+          vector->setNull(i, true);
+        } else {
+          exec::Aggregate::clearNull(rawNulls, i);
+          bits::setBit(rawValues, i, extractOneValue(group));
+        }
+      }
+    } else {
+      TData* rawValues = vector->mutableRawValues();
+      for (int32_t i = 0; i < numGroups; ++i) {
+        char* group = groups[i];
+        auto val = extractOneValue(group);
+        bool isNull = bits::isBitNull(rawNulls, i);
+        if (isNull && val) {
+          bits::setNull(rawNulls, i, false);
+          rawValues[i] = val;
+        }
+      }
+    }
+  }
+
+  // TData is used to store the updated sum state. It can be either
+  // TAccumulator or TResult, which in most cases are the same, but for
+  // sum(real) can differ. TValue is used to decode the sum input 'args'.
+  // It can be either TAccumulator or TInput, which is most cases are the same
+  // but for sum(real) can differ.
+  template <typename TData, typename TValue = TInput>
+  void updateInternal(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) {
+    const auto& arg = args[0];
+
+    if (mayPushdown && arg->isLazy()) {
+      BaseAggregate::template pushdown<SumHook<TValue, TData>>(
+          groups, rows, arg);
+      return;
+    }
+
+    if (exec::Aggregate::numNulls_) {
+      BaseAggregate::template updateGroups<true, TData, TValue>(
+          groups, rows, arg, &updateSingleValue<TData>, false);
+    } else {
+      BaseAggregate::template updateGroups<false, TData, TValue>(
+          groups, rows, arg, &updateSingleValue<TData>, false);
+    }
+  }
+
+ private:
+
+  static const ResultType kInitialValue_;
+  /// Update functions that check for overflows for integer types.
+  /// For floating points, an overflow results in +/- infinity which is a
+  /// valid output.
+  /// NULL, -1, 2, -1, NULL
+  template <typename TData>
+  static void updateSingleValue(TData& result, TData value) {
+    if constexpr (
+        std::is_same_v<TData, double> || std::is_same_v<TData, float>) {
+      result += value;
+    } else {
+      std::cout << "Result: " << result << ", value: " << value << std::endl;
+      if(value == std::numeric_limits<TData>::quiet_NaN()) {
+        std::cout << "we get quiet nan value" << std::endl;
+      }
+      if(result == std::numeric_limits<TData>::quiet_NaN()) {
+        std::cout << "we get quiet nan result" << std::endl;
+      }
+      result = functions::checkedPlus<TData>(result, value);
+    }
+  }
+
+  template <typename TData>
+  static void updateDuplicateValues(TData& result, TData value, int n) {
+    if constexpr (
+        std::is_same_v<TData, double> || std::is_same_v<TData, float>) {
+      result += n * value;
+    } else {
+      result = functions::checkedPlus<TData>(
+          result, functions::checkedMultiply<TData>(TData(n), value));
+    }
+  }
+};
+
+// MIN MAX START
+
+template <typename T>
+struct MinMaxTraitTest : public std::numeric_limits<T> {};
+
+template <>
+struct MinMaxTraitTest<Timestamp> {
+  static constexpr Timestamp lowest() {
+    return Timestamp(
+        MinMaxTraitTest<int64_t>::lowest(), MinMaxTraitTest<uint64_t>::lowest());
+  }
+
+  static constexpr Timestamp max() {
+    return Timestamp(MinMaxTraitTest<int64_t>::max(), MinMaxTraitTest<uint64_t>::max());
+  }
+};
+
+template <>
+struct MinMaxTraitTest<Date> {
+  static constexpr Date lowest() {
+    return Date(std::numeric_limits<int32_t>::lowest());
+  }
+
+  static constexpr Date max() {
+    return Date(std::numeric_limits<int32_t>::max());
+  }
+};
+
+template <>
+struct MinMaxTraitTest<IntervalDayTime> {
+  static constexpr IntervalDayTime lowest() {
+    return IntervalDayTime(std::numeric_limits<int64_t>::lowest());
+  }
+
+  static constexpr IntervalDayTime max() {
+    return IntervalDayTime(std::numeric_limits<int64_t>::max());
+  }
+};
+
+template <typename T>
+class MinMaxAggregateTest : public SimpleNumericAggregate<T, T, T> {
+  using BaseAggregate = SimpleNumericAggregate<T, T, T>;
+
+ public:
+  explicit MinMaxAggregateTest(TypePtr resultType) : BaseAggregate(resultType) {}
+
+  int32_t accumulatorFixedWidthSize() const override {
+    return sizeof(T);
+  }
+
+  int32_t accumulatorAlignmentSize() const override {
+    return 1;
+  }
+
+  void extractValues(char** groups, int32_t numGroups, VectorPtr* result)
+      override {
+    BaseAggregate::template doExtractValues<T>(
+        groups, numGroups, result, [&](char* group) {
+          return *BaseAggregate::Aggregate::template value<T>(group);
+        });
+  }
+
+  void extractAccumulators(char** groups, int32_t numGroups, VectorPtr* result)
+      override {
+    BaseAggregate::template doExtractValues<T>(
+        groups, numGroups, result, [&](char* group) {
+          return *BaseAggregate::Aggregate::template value<T>(group);
+        });
+  }
+};
+
+/// Override 'accumulatorAlignmentSize' for UnscaledLongDecimal values as it
+/// uses int128_t type. Some CPUs don't support misaligned access to int128_t
+/// type.
+template <>
+inline int32_t MinMaxAggregateTest<UnscaledLongDecimal>::accumulatorAlignmentSize()
+    const {
+  return static_cast<int32_t>(sizeof(UnscaledLongDecimal));
+}
+
+// Truncate timestamps to milliseconds precision.
+template <>
+void MinMaxAggregateTest<Timestamp>::extractValues(
+    char** groups,
+    int32_t numGroups,
+    VectorPtr* result) {
+  BaseAggregate::template doExtractValues<Timestamp>(
+      groups, numGroups, result, [&](char* group) {
+        auto ts = *BaseAggregate::Aggregate::template value<Timestamp>(group);
+        return Timestamp::fromMillis(ts.toMillis());
+      });
+}
+
+template <typename T>
+class MaxAggregateTest : public MinMaxAggregateTest<T> {
+  using BaseAggregate = SimpleNumericAggregate<T, T, T>;
+
+ public:
+  explicit MaxAggregateTest(TypePtr resultType) : MinMaxAggregateTest<T>(resultType) {}
+
+  void initializeNewGroups(
+      char** groups,
+      folly::Range<const vector_size_t*> indices) override {
+    exec::Aggregate::setAllNulls(groups, indices);
+    for (auto i : indices) {
+      *exec::Aggregate::value<T>(groups[i]) = kInitialValue_;
+    }
+  }
+
+  void addRawInput(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    if (mayPushdown && args[0]->isLazy()) {
+      BaseAggregate::template pushdown<MinMaxHook<T, false>>(
+          groups, rows, args[0]);
+      return;
+    }
+    BaseAggregate::template updateGroups<true, T>(
+        groups,
+        rows,
+        args[0],
+        [](T& result, T value) {
+          if (result < value) {
+            result = value;
+          }
+        },
+        mayPushdown);
+  }
+
+  void addIntermediateResults(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    addRawInput(groups, rows, args, mayPushdown);
+  }
+
+  void addSingleGroupRawInput(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    BaseAggregate::updateOneGroup(
+        group,
+        rows,
+        args[0],
+        [](T& result, T value) {
+          if (result < value) {
+            result = value;
+          }
+        },
+        [](T& result, T value, int /* unused */) { result = value; },
+        mayPushdown,
+        kInitialValue_);
+  }
+
+  void addSingleGroupIntermediateResults(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    addSingleGroupRawInput(group, rows, args, mayPushdown);
+  }
+
+ private:
+  static const T kInitialValue_;
+};
+
+template <typename T>
+const T MaxAggregateTest<T>::kInitialValue_ = MinMaxTraitTest<T>::lowest();
+
+template <typename T>
+class MinAggregateTest : public MinMaxAggregateTest<T> {
+  using BaseAggregate = SimpleNumericAggregate<T, T, T>;
+
+ public:
+  explicit MinAggregateTest(TypePtr resultType) : MinMaxAggregateTest<T>(resultType) {}
+
+  void initializeNewGroups(
+      char** groups,
+      folly::Range<const vector_size_t*> indices) override {
+    exec::Aggregate::setAllNulls(groups, indices);
+    for (auto i : indices) {
+      *exec::Aggregate::value<T>(groups[i]) = kInitialValue_;
+    }
+  }
+
+  void addRawInput(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    if (mayPushdown && args[0]->isLazy()) {
+      BaseAggregate::template pushdown<MinMaxHook<T, true>>(
+          groups, rows, args[0]);
+      return;
+    }
+    BaseAggregate::template updateGroups<true, T>(
+        groups,
+        rows,
+        args[0],
+        [](T& result, T value) {
+          if (result > value) {
+            result = value;
+          }
+        },
+        mayPushdown);
+  }
+
+  void addIntermediateResults(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    addRawInput(groups, rows, args, mayPushdown);
+  }
+
+  void addSingleGroupRawInput(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    BaseAggregate::updateOneGroup(
+        group,
+        rows,
+        args[0],
+        [](T& result, T value) { result = result < value ? result : value; },
+        [](T& result, T value, int /* unused */) { result = value; },
+        mayPushdown,
+        kInitialValue_);
+  }
+
+  void addSingleGroupIntermediateResults(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    addSingleGroupRawInput(group, rows, args, mayPushdown);
+  }
+
+ private:
+  static const T kInitialValue_;
+};
+
+template <typename T>
+const T MinAggregateTest<T>::kInitialValue_ = MinMaxTraitTest<T>::max();
+
+class NonNumericMinMaxAggregateBaseTest : public exec::Aggregate {
+ public:
+  explicit NonNumericMinMaxAggregateBaseTest(const TypePtr& resultType)
+      : exec::Aggregate(resultType) {}
+
+  int32_t accumulatorFixedWidthSize() const override {
+    return sizeof(SingleValueAccumulator);
+  }
+
+  void initializeNewGroups(
+      char** groups,
+      folly::Range<const vector_size_t*> indices) override {
+    exec::Aggregate::setAllNulls(groups, indices);
+    std::cout << "NonNumericMinMaxAggregateBaseTest::initializeNewGroups" << std::endl;
+    for (auto i : indices) {
+      new (groups[i] + offset_) SingleValueAccumulator();
+    }
+  }
+
+  void extractValues(char** groups, int32_t numGroups, VectorPtr* result)
+      override {
+    VELOX_CHECK(result);
+    (*result)->resize(numGroups);
+
+    uint64_t* rawNulls = nullptr;
+    if ((*result)->mayHaveNulls()) {
+      BufferPtr nulls = (*result)->mutableNulls((*result)->size());
+      rawNulls = nulls->asMutable<uint64_t>();
+    }
+
+    for (auto i = 0; i < numGroups; ++i) {
+      char* group = groups[i];
+      auto accumulator = value<SingleValueAccumulator>(group);
+      if (!accumulator->hasValue()) {
+        (*result)->setNull(i, true);
+      } else {
+        if (rawNulls) {
+          bits::clearBit(rawNulls, i);
+        }
+        accumulator->read(*result, i);
+      }
+    }
+  }
+
+  void extractAccumulators(char** groups, int32_t numGroups, VectorPtr* result)
+      override {
+    // partial and final aggregations are the same
+    extractValues(groups, numGroups, result);
+  }
+
+  void destroy(folly::Range<char**> groups) override {
+    for (auto group : groups) {
+      value<SingleValueAccumulator>(group)->destroy(allocator_);
+    }
+  }
+
+ protected:
+  template <typename TCompareTest>
+  void doUpdate(
+      char** groups,
+      const SelectivityVector& rows,
+      const VectorPtr& arg,
+      TCompareTest compareTest) {
+    DecodedVector decoded(*arg, rows, true);
+    auto indices = decoded.indices();
+    auto baseVector = decoded.base();
+
+    if (decoded.isConstantMapping() && decoded.isNullAt(0)) {
+      // nothing to do; all values are nulls
+      return;
+    }
+
+    rows.applyToSelected([&](vector_size_t i) {
+      if (decoded.isNullAt(i)) {
+        return;
+      }
+      auto accumulator = value<SingleValueAccumulator>(groups[i]);
+      if (!accumulator->hasValue() ||
+          compareTest(accumulator->compare(decoded, i))) {
+        accumulator->write(baseVector, indices[i], allocator_);
+      }
+    });
+  }
+
+  template <typename TCompareTest>
+  void doUpdateSingleGroup(
+      char* group,
+      const SelectivityVector& rows,
+      const VectorPtr& arg,
+      TCompareTest compareTest) {
+    DecodedVector decoded(*arg, rows, true);
+    auto indices = decoded.indices();
+    auto baseVector = decoded.base();
+
+    if (decoded.isConstantMapping()) {
+      if (decoded.isNullAt(0)) {
+        // nothing to do; all values are nulls
+        return;
+      }
+
+      auto accumulator = value<SingleValueAccumulator>(group);
+      if (!accumulator->hasValue() ||
+          compareTest(accumulator->compare(decoded, 0))) {
+        accumulator->write(baseVector, indices[0], allocator_);
+      }
+      return;
+    }
+
+    auto accumulator = value<SingleValueAccumulator>(group);
+    rows.applyToSelected([&](vector_size_t i) {
+      if (decoded.isNullAt(i)) {
+        return;
+      }
+      if (!accumulator->hasValue() ||
+          compareTest(accumulator->compare(decoded, i))) {
+        accumulator->write(baseVector, indices[i], allocator_);
+      }
+    });
+  }
+};
+
+class NonNumericMaxAggregateTest : public NonNumericMinMaxAggregateBaseTest {
+ public:
+  explicit NonNumericMaxAggregateTest(const TypePtr& resultType)
+      : NonNumericMinMaxAggregateBaseTest(resultType) {}
+
+  void addRawInput(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool /*mayPushdown*/) override {
+    doUpdate(groups, rows, args[0], [](int32_t compareResult) {
+      return compareResult < 0;
+    });
+  }
+
+  void addIntermediateResults(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    addRawInput(groups, rows, args, mayPushdown);
+  }
+
+  void addSingleGroupRawInput(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool /*mayPushdown*/) override {
+    doUpdateSingleGroup(group, rows, args[0], [](int32_t compareResult) {
+      return compareResult < 0;
+    });
+  }
+
+  void addSingleGroupIntermediateResults(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    addSingleGroupRawInput(group, rows, args, mayPushdown);
+  }
+};
+
+class NonNumericMinAggregateTest : public NonNumericMinMaxAggregateBaseTest {
+ public:
+  explicit NonNumericMinAggregateTest(const TypePtr& resultType)
+      : NonNumericMinMaxAggregateBaseTest(resultType) {}
+
+  void addRawInput(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool /*mayPushdown*/) override {
+    doUpdate(groups, rows, args[0], [](int32_t compareResult) {
+      return compareResult > 0;
+    });
+  }
+
+  void addIntermediateResults(
+      char** groups,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    addRawInput(groups, rows, args, mayPushdown);
+  }
+
+  void addSingleGroupRawInput(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool /*mayPushdown*/) override {
+    doUpdateSingleGroup(group, rows, args[0], [](int32_t compareResult) {
+      return compareResult > 0;
+    });
+  }
+
+  void addSingleGroupIntermediateResults(
+      char* group,
+      const SelectivityVector& rows,
+      const std::vector<VectorPtr>& args,
+      bool mayPushdown) override {
+    addSingleGroupRawInput(group, rows, args, mayPushdown);
+  }
+};
+
+template <template <typename T> class TNumeric, typename TNonNumeric>
+bool registerMinMax(const std::string& name) {
+  std::vector<std::shared_ptr<exec::AggregateFunctionSignature>> signatures;
+  signatures.push_back(exec::AggregateFunctionSignatureBuilder()
+                           .typeVariable("T")
+                           .returnType("T")
+                           .intermediateType("T")
+                           .argumentType("T")
+                           .build());
+
+  return exec::registerAggregateFunction(
+      name,
+      std::move(signatures),
+      [name](
+          core::AggregationNode::Step step,
+          std::vector<TypePtr> argTypes,
+          const TypePtr& resultType) -> std::unique_ptr<exec::Aggregate> {
+        VELOX_CHECK_EQ(argTypes.size(), 1, "{} takes only one argument", name);
+        auto inputType = argTypes[0];
+        switch (inputType->kind()) {
+          case TypeKind::BOOLEAN:
+            return std::make_unique<TNumeric<bool>>(resultType);
+          case TypeKind::TINYINT:
+            return std::make_unique<TNumeric<int8_t>>(resultType);
+          case TypeKind::SMALLINT:
+            return std::make_unique<TNumeric<int16_t>>(resultType);
+          case TypeKind::INTEGER:
+            return std::make_unique<TNumeric<int32_t>>(resultType);
+          case TypeKind::BIGINT:
+            return std::make_unique<TNumeric<int64_t>>(resultType);
+          case TypeKind::REAL:
+            return std::make_unique<TNumeric<float>>(resultType);
+          case TypeKind::DOUBLE:
+            return std::make_unique<TNumeric<double>>(resultType);
+          case TypeKind::TIMESTAMP:
+            return std::make_unique<TNumeric<Timestamp>>(resultType);
+          case TypeKind::DATE:
+            return std::make_unique<TNumeric<Date>>(resultType);
+          case TypeKind::INTERVAL_DAY_TIME:
+            return std::make_unique<TNumeric<IntervalDayTime>>(resultType);
+          case TypeKind::LONG_DECIMAL:
+            return std::make_unique<TNumeric<UnscaledLongDecimal>>(resultType);
+          case TypeKind::SHORT_DECIMAL:
+            return std::make_unique<TNumeric<UnscaledShortDecimal>>(resultType);
+          case TypeKind::VARCHAR:
+          case TypeKind::ARRAY:
+          case TypeKind::MAP:
+          case TypeKind::ROW:
+            return std::make_unique<TNonNumeric>(inputType);
+          default:
+            VELOX_CHECK(
+                false,
+                "Unknown input type for {} aggregation {}",
+                name,
+                inputType->kindName());
+        }
+      });
+}
+
+// MIN MAX STOP
+
+
+template <typename TInput, typename TAccumulator, typename ResultType>
+const ResultType SumNullableAggregateTest<TInput, TAccumulator, ResultType>::kInitialValue_ = SumTrait<ResultType>::quiet_NaN();
+
 class SumTest : public AggregationTestBase {
  protected:
   void SetUp() override {
@@ -225,6 +953,12 @@ class SumTest : public AggregationTestBase {
     allowInputShuffle();
     facebook::velox::aggregate::prestosql::registerSum<SumNullAggregateTest>(
         "sum_null_test");
+    facebook::velox::aggregate::prestosql::registerSum<SumNullableAggregateTest>(
+        "sum_nullable_test");
+
+    // MIN MAX TEST
+    registerMinMax<MinAggregateTest, NonNumericMinAggregateTest>("test_min");
+    registerMinMax<MaxAggregateTest, NonNumericMaxAggregateTest>("test_max");
   }
 
   template <
@@ -2092,6 +2826,379 @@ TEST_F(SumTest, sumNullSimpleTest) {
   std::cout << "x1: " << x1 << ", y1: " << y1 << std::endl;
   auto res1 = functions::checkedPlus<int32_t>(x1, y1);
   std::cout << "Res1: " << res1 << std::endl;
+}
+
+TEST_F(SumTest, MaxNullSimpleTest) {
+  auto a_vec = makeFlatVector<int32_t>({1, 2, 1, 2, 3});
+  auto b_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL});
+  auto c_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment =
+      PlanBuilder()
+          .values({row_vecs})
+          .aggregation(
+              {},
+              {"max(c1)"},
+              {},
+              facebook::velox::core::AggregationNode::Step::kSingle,
+              true)
+          .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*)
+      -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      printOutput(output);
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task",
+      group_by_fragment,
+      0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()),
+      consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, MaxEmptySimpleTest) {
+  auto a_vec = makeFlatVector<int32_t>({});
+  auto b_vec = makeFlatVector<int32_t>({});
+  auto c_vec = makeFlatVector<int32_t>({});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment =
+      PlanBuilder()
+          .values({row_vecs})
+          .aggregation(
+              {},
+              {"max(c1)"},
+              {},
+              facebook::velox::core::AggregationNode::Step::kSingle,
+              true)
+          .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*)
+      -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      printOutput(output);
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task",
+      group_by_fragment,
+      0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()),
+      consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sumNULLNullableTest) {
+  auto a_vec = makeFlatVector<int32_t>({1, 2, 1, 2, 3});
+  auto b_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL});
+  auto c_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment =
+      PlanBuilder()
+          .values({row_vecs})
+          .aggregation(
+              {},
+              {"sum_nullable_test(c1)"},
+              {},
+              facebook::velox::core::AggregationNode::Step::kSingle,
+              true)
+          .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*)
+      -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      printOutput(output);
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task",
+      group_by_fragment,
+      0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()),
+      consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sumEmptyNullableTest) {
+  auto a_vec = makeFlatVector<int32_t>({});
+  auto b_vec = makeFlatVector<int32_t>({});
+  auto c_vec = makeFlatVector<int32_t>({});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment =
+      PlanBuilder()
+          .values({row_vecs})
+          .aggregation(
+              {},
+              {"sum_nullable_test(c1)"},
+              {},
+              facebook::velox::core::AggregationNode::Step::kSingle,
+              true)
+          .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*)
+      -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      printOutput(output);
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task",
+      group_by_fragment,
+      0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()),
+      consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sumMixNULLNullableTestV2) {
+  auto a_vec = makeFlatVector<int32_t>({1, 2, 1, 2, 3});
+  auto b_vec = makeFlatVector<int32_t>({{}, -1, 2, -1, 0});
+  auto c_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment =
+      PlanBuilder()
+          .values({row_vecs})
+          .aggregation(
+              {},
+              {"sum_nullable_test(c1)", "sum(c1)"},
+              {},
+              facebook::velox::core::AggregationNode::Step::kSingle,
+              true)
+          .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*)
+      -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      printOutput(output);
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task",
+      group_by_fragment,
+      0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()),
+      consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sumMixNULLZeroNullableTestV2) {
+  auto a_vec = makeFlatVector<int32_t>({1, 2, 1, 2, 3});
+  auto b_vec = makeFlatVector<int32_t>({{}, {}, {}, {}, {}});
+  auto c_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment =
+      PlanBuilder()
+          .values({row_vecs})
+          .aggregation(
+              {},
+              {"sum_nullable_test(c1)", "sum(c1)"},
+              {},
+              facebook::velox::core::AggregationNode::Step::kSingle,
+              true)
+          .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*)
+      -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      printOutput(output);
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task",
+      group_by_fragment,
+      0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()),
+      consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sumMixNULLZeroNullableGroupByTestV2) {
+  auto a_vec = makeFlatVector<int32_t>({1, 2, 1, 2, 3});
+  auto b_vec = makeFlatVector<int32_t>({{}, {}, {}, {}, {}});
+  auto c_vec = makeFlatVector<int32_t>({NULL, NULL, NULL, NULL, NULL});
+  b_vec->setNull(0, true);
+  b_vec->setNull(1, true);
+  b_vec->setNull(2, true);
+  b_vec->setNull(3, true);
+  b_vec->setNull(4, true);
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment =
+      PlanBuilder()
+          .values({row_vecs})
+          .aggregation(
+              {"c0"},
+              {"sum_nullable_test(c1)", "sum(c1)"},
+              {},
+              facebook::velox::core::AggregationNode::Step::kSingle,
+              true)
+          .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*)
+      -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      printOutput(output);
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task",
+      group_by_fragment,
+      0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()),
+      consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
+TEST_F(SumTest, sumEmptyNullableTestV2) {
+  auto a_vec = makeFlatVector<int32_t>({});
+  auto b_vec = makeFlatVector<int32_t>({});
+  auto c_vec = makeFlatVector<int32_t>({});
+
+  auto row_vecs = makeRowVector({"c0", "c1", "c2"}, {a_vec, b_vec, c_vec});
+
+  auto group_by_fragment =
+      PlanBuilder()
+          .values({row_vecs})
+          .aggregation(
+              {},
+              {"sum_nullable_test(c1)", "sum(c1)"},
+              {},
+              facebook::velox::core::AggregationNode::Step::kSingle,
+              true)
+          .planFragment();
+
+  facebook::velox::exec::Consumer consumer =
+      [&](facebook::velox::RowVectorPtr output,
+          facebook::velox::ContinueFuture*)
+      -> facebook::velox::exec::BlockingReason {
+    if (output) {
+      printOutput(output);
+    }
+    return facebook::velox::exec::BlockingReason::kNotBlocked;
+  };
+
+  // testing the groupby value extraction with a consumer
+  std::shared_ptr<folly::Executor> executor(
+      std::make_shared<folly::CPUThreadPoolExecutor>(1));
+
+  auto group_by_consumer_task = std::make_shared<facebook::velox::exec::Task>(
+      "group_by_consumer_task",
+      group_by_fragment,
+      0,
+      std::make_shared<facebook::velox::core::QueryCtx>(executor.get()),
+      consumer);
+
+  facebook::velox::exec::Task::start(group_by_consumer_task, 1);
+
+  while (group_by_consumer_task->isRunning()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
 }
 
 } // namespace
