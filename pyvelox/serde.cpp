@@ -15,8 +15,10 @@
  */
 
 #include "serde.h" // @manual
+#include "context.h"
 
 #include <velox/vector/VectorSaver.h>
+
 
 namespace facebook::velox::py {
 
@@ -25,8 +27,9 @@ namespace py = pybind11;
 namespace {
     static VectorPtr pyRestoreVectorFromFileHelper(
         const char* FOLLY_NONNULL filePath) {
-        std::shared_ptr<facebook::velox::memory::MemoryPool> pool = facebook::velox::memory::addDefaultLeafMemoryPool();
-        return restoreVectorFromFile(filePath, pool.get());
+        using namespace facebook::velox;
+        memory::MemoryPool* pool = PyVeloxContext::getInstance().pool();
+        return restoreVectorFromFile(filePath, pool);
     }
 }
 
