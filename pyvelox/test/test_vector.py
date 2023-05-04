@@ -267,12 +267,15 @@ class TestVeloxVectorSaver(unittest.TestCase):
     def tearDown(self):
         # remove the temporary directory
         shutil.rmtree(self.test_dir)
+        print("Tear Down")
     
     def test_serde_vector(self):
         vec = pv.from_list([1, 2, 3])
         fpath = path.join(self.test_dir, "a.pyvelox")
         pv.save_vector(vec, fpath)
         loaded_vec = pv.load_vector(fpath)
+        print()
+        print(loaded_vec)
         self.assertEqual(len(vec), len(loaded_vec))
         for i in range(len(vec)):
             self.assertEqual(vec[i], loaded_vec[i])
