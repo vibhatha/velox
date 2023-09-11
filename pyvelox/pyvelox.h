@@ -16,10 +16,12 @@
 
 #pragma once
 
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 #include <velox/buffer/StringViewBufferHolder.h>
+#include <velox/dwio/dwrf/writer/Writer.h>
 #include <velox/expression/Expr.h>
 #include <velox/functions/prestosql/registration/RegistrationFunctions.h>
 #include <velox/parse/Expressions.h>
@@ -27,8 +29,10 @@
 #include <velox/parse/TypeResolver.h>
 #include <velox/type/Type.h>
 #include <velox/type/Variant.h>
+#include <velox/vector/ComplexVector.h>
 #include <velox/vector/DictionaryVector.h>
 #include <velox/vector/FlatVector.h>
+#include <velox/vector/tests/utils/VectorMaker.h>
 #include "folly/json.h"
 
 #include "context.h"
@@ -107,6 +111,19 @@ inline velox::variant pyToVariant(const py::handle& obj, const Type& dtype) {
     default:
       throw py::type_error("Unsupported type supplied");
   }
+}
+
+inline void checkRowVectorBounds(const RowVectorPtr& v, vector_size_t idx) {
+  if (idx < 0 || size_t(idx) >= v->childrenSize()) {
+    throw std::out_of_range("Index out of range");
+  }
+}
+
+inline VectorPtr getVectorFromRowVectorPtr(
+    const RowVectorPtr& v,
+    vector_size_t idx) {
+  checkRowVectorBounds(v, idx);
+  return v->childAt(idx);
 }
 
 static VectorPtr pyToConstantVector(
@@ -504,6 +521,63 @@ static void addVectorBindings(
             std::move(baseVector),
             PyVeloxContext::getSingletonInstance().pool());
       });
+
+  m.def(
+      "row_vector",
+      [](std::vector<std::string>& names,
+         std::vector<VectorPtr>& values,
+         std::function<bool(vector_size_t /*row*/)> isNullAt = nullptr) {
+        facebook::velox::test::VectorMaker vectorMaker{
+            PyVeloxContext::getSingletonInstance().pool()};
+
+        auto setNulls =
+            [](const VectorPtr& vector,
+               std::function<bool(vector_size_t /*row*/)> isNullAt) {
+              for (vector_size_t i = 0; i < vector->size(); i++) {
+                if (isNullAt(i)) {
+                  vector->setNull(i, true);
+                }
+              }
+            };
+
+        auto rowVector = vectorMaker.rowVector(names, values);
+        if (isNullAt) {
+          setNulls(rowVector, isNullAt);
+        }
+        return rowVector;
+      });
+
+  m.def(
+      "save_row_vector",
+        [](const std::vector<RowVectorPtr>& rowVectors,
+          const std::string filePath) {
+          auto* rootPool = PyVeloxContext::getSingletonInstance().rootPool();
+          auto config = std::make_shared<facebook::velox::dwrf::Config>();
+          facebook::velox::dwrf::WriterOptions options;
+          options.config = config;
+          options.schema = rowVectors[0]->type();
+          // auto sink =
+          //     std::make_unique<facebook::velox::dwio::common::LocalFileSink>(
+          //         filePath, {.pool = rootPool});
+          auto sink = facebook::velox::dwio::common::LocalFileSink::create(
+                  filePath, {.pool = rootPool});
+          auto childPool =
+              rootPool->addAggregateChild("pyvelox.rowvector.writer");
+          facebook::velox::dwrf::Writer writer{
+              options, std::move(sink), *childPool};
+          for (size_t i = 0; i < rowVectors.size(); ++i) {
+            writer.write(rowVectors[i]);
+          }
+          writer.close();
+    });
+    
+  py::class_<RowVector, BaseVector, RowVectorPtr>(
+      m, "RowVector", py::module_local(asModuleLocalDefinitions))
+      .def("__len__", &RowVector::childrenSize)
+      .def("__getitem__", [](RowVectorPtr& v, vector_size_t idx) {
+        return getVectorFromRowVectorPtr(v, idx);
+  });
+  
 }
 
 static void addExpressionBindings(
