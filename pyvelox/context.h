@@ -15,10 +15,8 @@
  */
 
 #include <pybind11/stl.h>
-#include <velox/common/file/FileSystems.h>
 #include <velox/common/memory/Memory.h>
 #include <velox/core/QueryCtx.h>
-#include <velox/dwio/dwrf/reader/DwrfReader.h>
 
 namespace facebook::velox::py {
 
@@ -44,10 +42,6 @@ struct PyVeloxContext {
     return execCtx_.get();
   }
 
-  facebook::velox::memory::MemoryPool* rootPool() {
-    return rootPool_.get();
-  }
-
   static inline void cleanup() {
     if (instance_) {
       instance_.reset();
@@ -61,8 +55,6 @@ struct PyVeloxContext {
   PyVeloxContext& operator=(const PyVeloxContext&) = delete;
   PyVeloxContext& operator=(const PyVeloxContext&&) = delete;
 
-  std::shared_ptr<facebook::velox::memory::MemoryPool> rootPool_{
-      memory::defaultMemoryManager().addRootPool()};
   std::shared_ptr<facebook::velox::memory::MemoryPool> pool_ =
       facebook::velox::memory::addDefaultLeafMemoryPool();
   std::shared_ptr<facebook::velox::core::QueryCtx> queryCtx_ =

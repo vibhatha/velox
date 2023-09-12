@@ -21,7 +21,6 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 #include <velox/buffer/StringViewBufferHolder.h>
-#include <velox/dwio/dwrf/writer/Writer.h>
 #include <velox/expression/Expr.h>
 #include <velox/functions/prestosql/registration/RegistrationFunctions.h>
 #include <velox/parse/Expressions.h>
@@ -32,7 +31,6 @@
 #include <velox/vector/ComplexVector.h>
 #include <velox/vector/DictionaryVector.h>
 #include <velox/vector/FlatVector.h>
-#include <velox/vector/tests/utils/VectorMaker.h>
 #include "folly/json.h"
 
 #include "context.h"
@@ -522,61 +520,68 @@ static void addVectorBindings(
             PyVeloxContext::getSingletonInstance().pool());
       });
 
-  m.def(
-      "row_vector",
-      [](std::vector<std::string>& names,
-         std::vector<VectorPtr>& values,
-         std::function<bool(vector_size_t /*row*/)> isNullAt = nullptr) {
-        facebook::velox::test::VectorMaker vectorMaker{
-            PyVeloxContext::getSingletonInstance().pool()};
+  // m.def(
+  //     "row_vector",
+  //     [](std::vector<std::string>& names,
+  //        std::vector<VectorPtr>& values,
+  //        std::function<bool(vector_size_t /*row*/)> isNullAt = nullptr) {
+  //       auto setNulls =
+  //           [](const VectorPtr& vector,
+  //              std::function<bool(vector_size_t /*row*/)> isNullAt) {
+  //             for (vector_size_t i = 0; i < vector->size(); i++) {
+  //               if (isNullAt(i)) {
+  //                 vector->setNull(i, true);
+  //               }
+  //             }
+  //           };
 
-        auto setNulls =
-            [](const VectorPtr& vector,
-               std::function<bool(vector_size_t /*row*/)> isNullAt) {
-              for (vector_size_t i = 0; i < vector->size(); i++) {
-                if (isNullAt(i)) {
-                  vector->setNull(i, true);
-                }
-              }
-            };
+  //       std::vector<std::shared_ptr<const Type>> childTypes;
+  //       childTypes.resize(values.size());
+  //       for (int i = 0; i < values.size(); i++) {
+  //         childTypes[i] = values[i]->type();
+  //       }
+  //       auto rowType = ROW(std::move(names), std::move(childTypes));
+  //       const size_t vectorSize = values.empty() ? 0 : values.front()->size();
+  //       auto rowVector = std::make_shared<RowVector>(
+  //         PyVeloxContext::getSingletonInstance().pool(), rowType, BufferPtr(nullptr), vectorSize, values);
 
-        auto rowVector = vectorMaker.rowVector(names, values);
-        if (isNullAt) {
-          setNulls(rowVector, isNullAt);
-        }
-        return rowVector;
-      });
+  //       //auto rowVector = vectorMaker.rowVector(names, values);
+  //       if (isNullAt) {
+  //         setNulls(rowVector, isNullAt);
+  //       }
+  //       return rowVector;
+  //     });
 
-  m.def(
-      "save_row_vector",
-        [](const std::vector<RowVectorPtr>& rowVectors,
-          const std::string filePath) {
-          auto* rootPool = PyVeloxContext::getSingletonInstance().rootPool();
-          auto config = std::make_shared<facebook::velox::dwrf::Config>();
-          facebook::velox::dwrf::WriterOptions options;
-          options.config = config;
-          options.schema = rowVectors[0]->type();
-          // auto sink =
-          //     std::make_unique<facebook::velox::dwio::common::LocalFileSink>(
-          //         filePath, {.pool = rootPool});
-          auto sink = facebook::velox::dwio::common::LocalFileSink::create(
-                  filePath, {.pool = rootPool});
-          auto childPool =
-              rootPool->addAggregateChild("pyvelox.rowvector.writer");
-          facebook::velox::dwrf::Writer writer{
-              options, std::move(sink), *childPool};
-          for (size_t i = 0; i < rowVectors.size(); ++i) {
-            writer.write(rowVectors[i]);
-          }
-          writer.close();
-    });
+  // m.def(
+  //     "save_row_vector",
+  //       [](const std::vector<RowVectorPtr>& rowVectors,
+  //         const std::string filePath) {
+  //         auto* rootPool = PyVeloxContext::getSingletonInstance().rootPool();
+  //         auto config = std::make_shared<facebook::velox::dwrf::Config>();
+  //         facebook::velox::dwrf::WriterOptions options;
+  //         options.config = config;
+  //         options.schema = rowVectors[0]->type();
+  //         // auto sink =
+  //         //     std::make_unique<facebook::velox::dwio::common::LocalFileSink>(
+  //         //         filePath, {.pool = rootPool});
+  //         auto sink = facebook::velox::dwio::common::LocalFileSink::create(
+  //                 filePath, {.pool = rootPool});
+  //         auto childPool =
+  //             rootPool->addAggregateChild("pyvelox.rowvector.writer");
+  //         facebook::velox::dwrf::Writer writer{
+  //             options, std::move(sink), *childPool};
+  //         for (size_t i = 0; i < rowVectors.size(); ++i) {
+  //           writer.write(rowVectors[i]);
+  //         }
+  //         writer.close();
+  //   });
     
-  py::class_<RowVector, BaseVector, RowVectorPtr>(
-      m, "RowVector", py::module_local(asModuleLocalDefinitions))
-      .def("__len__", &RowVector::childrenSize)
-      .def("__getitem__", [](RowVectorPtr& v, vector_size_t idx) {
-        return getVectorFromRowVectorPtr(v, idx);
-  });
+  // py::class_<RowVector, BaseVector, RowVectorPtr>(
+  //     m, "RowVector", py::module_local(asModuleLocalDefinitions))
+  //     .def("__len__", &RowVector::childrenSize)
+  //     .def("__getitem__", [](RowVectorPtr& v, vector_size_t idx) {
+  //       return getVectorFromRowVectorPtr(v, idx);
+  // });
   
 }
 
