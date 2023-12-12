@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "velox/core/QueryCtx.h"
 #include "velox/core/Expressions.h"
 #include "velox/substrait/SubstraitParser.h"
 #include "velox/vector/ComplexVector.h"
@@ -31,8 +32,9 @@ class SubstraitVeloxExprConverter {
   /// storing the relations between the function id and the function name.
   explicit SubstraitVeloxExprConverter(
       memory::MemoryPool* pool,
-      const std::unordered_map<uint64_t, std::string>& functionMap)
-      : pool_(pool), functionMap_(functionMap) {}
+      const std::unordered_map<uint64_t, std::string>& functionMap,
+      const std::unique_ptr<core::ExecCtx>& execCtx)
+      : pool_(pool), functionMap_(functionMap), execCtx_(execCtx) {}
 
   /// Convert Substrait Field into Velox Field Expression.
   std::shared_ptr<const core::FieldAccessTypedExpr> toVeloxExpr(
@@ -78,6 +80,9 @@ class SubstraitVeloxExprConverter {
   /// The map storing the relations between the function id and the function
   /// name.
   std::unordered_map<uint64_t, std::string> functionMap_;
+
+  /// Query Context
+  const std::unique_ptr<core::ExecCtx>& execCtx_;
 };
 
 } // namespace facebook::velox::substrait

@@ -565,7 +565,7 @@ core::PlanNodePtr SubstraitVeloxPlanConverter::toVeloxPlan(
 
   // Construct the expression converter.
   exprConverter_ =
-      std::make_shared<SubstraitVeloxExprConverter>(pool_, functionMap_);
+      std::make_shared<SubstraitVeloxExprConverter>(pool_, functionMap_, execCtx_);
 
   // In fact, only one RelRoot or Rel is expected here.
   VELOX_CHECK_EQ(substraitPlan.relations_size(), 1);

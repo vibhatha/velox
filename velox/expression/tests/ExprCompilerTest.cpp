@@ -37,6 +37,14 @@ class ExprCompilerTest : public testing::Test,
         BOOLEAN(), std::vector<core::TypedExprPtr>{a, b}, "and");
   }
 
+  core::TypedExprPtr substringCall(
+      const core::TypedExprPtr& a,
+      const core::TypedExprPtr& b,
+      const core::TypedExprPtr& c) {
+    return std::make_shared<core::CallTypedExpr>(
+        VARCHAR(), std::vector<core::TypedExprPtr>{a, b, c}, "substr");
+  }
+
   core::TypedExprPtr orCall(
       const core::TypedExprPtr& a,
       const core::TypedExprPtr& b) {
@@ -273,6 +281,17 @@ TEST_F(ExprCompilerTest, customTypeConstant) {
 
   auto exprSet = compile(expression);
   ASSERT_EQ("[1, 2, 3]:JSON", compile(expression)->toString());
+}
+
+TEST_F(ExprCompilerTest, substringCallTest) {
+  auto rowType =
+      ROW({"a", "b", "c", "d"}, {VARCHAR(), INTEGER(), INTEGER(), INTEGER()});
+
+  auto field = makeField(rowType);
+
+  auto expression =
+      substringCall(field("a"), field("b"), field("c"));
+  ASSERT_EQ("substr(a, b, c)", compile(expression)->toString());
 }
 
 } // namespace facebook::velox::exec::test

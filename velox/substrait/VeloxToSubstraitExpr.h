@@ -23,6 +23,7 @@
 #include "velox/substrait/proto/substrait/algebra.pb.h"
 #include "velox/vector/ConstantVector.h"
 
+
 namespace facebook::velox::substrait {
 
 class VeloxToSubstraitExprConvertor {

@@ -353,6 +353,7 @@ void convertVectorValue(
     }
   }
 }
+
 } // namespace
 
 const ::substrait::Expression& VeloxToSubstraitExprConvertor::toSubstraitExpr(
@@ -432,6 +433,9 @@ VeloxToSubstraitExprConvertor::toSubstraitExpr(
 
   ::substrait::Expression_ReferenceSegment_StructField* directStruct =
       substraitFieldExpr->mutable_direct_reference()->mutable_struct_field();
+
+  ::substrait::Expression_FieldReference_RootReference* rootReference = substraitFieldExpr->mutable_root_reference();
+  *rootReference = ::substrait::Expression_FieldReference_RootReference::default_instance();
 
   directStruct->set_field(inputType->getChildIdx(exprName));
   return *substraitFieldExpr;

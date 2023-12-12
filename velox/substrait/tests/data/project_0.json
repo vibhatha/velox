@@ -1,0 +1,161 @@
+{
+  "extensionUris": [{
+    "extensionUriAnchor": 1,
+    "uri": "/functions_arithmetic.yaml"
+  }],
+  "extensions":[
+    {
+      "extensionFunction":{
+        "extensionUriReference": 1,
+        "name":"add:i32_i32"
+      }
+    },
+    {
+      "extensionFunction":{
+        "extensionUriReference": 1,
+        "functionAnchor":1,
+        "name":"subtract:i32_i32"
+      }
+    }
+  ],
+  "relations":[
+    {
+      "root":{
+        "input":{
+          "project":{
+            "input":{
+              "read":{
+                "baseSchema":{
+                  "names":[
+                    "L_ORDERKEY",
+                    "L_PARTKEY",
+                    "L_SUPPKEY",
+                    "L_LINENUMBER"
+                  ],
+                  "struct":{
+                    "types":[
+                      {
+                        "i64":{
+                          "nullability":"NULLABILITY_REQUIRED"
+                        }
+                      },
+                      {
+                        "i64":{
+                          "nullability":"NULLABILITY_REQUIRED"
+                        }
+                      },
+                      {
+                        "i64":{
+                          "nullability":"NULLABILITY_REQUIRED"
+                        }
+                      },
+                      {
+                        "i32":{
+                          "nullability":"NULLABILITY_REQUIRED"
+                        }
+                      }
+                    ],
+                    "nullability":"NULLABILITY_REQUIRED"
+                  }
+                },
+                "projection":{
+                  "select":{
+                    "structItems":[
+                      {
+                        "field":3
+                      }
+                    ]
+                  },
+                  "maintainSingularStruct":true
+                },
+                "virtual_table": {
+                  "values": [
+                   {
+                    "fields": [
+                     {
+                      "nullable": false,
+                      "i64": "20"
+                     },
+                     {
+                      "nullable": false,
+                      "i64": "12"
+                     },
+                     {
+                      "nullable": false,
+                      "i64": 5
+                     },
+                     {
+                      "nullable": false,
+                      "i32": "5"
+                     }
+                    ]
+                   }
+                ]
+              }
+              }
+            },
+            "expressions":[
+              {
+                "scalarFunction":{
+                  "functionReference":0,
+                  "outputType":{
+                    "i32":{
+                      "nullability":"NULLABILITY_NULLABLE"
+                    }
+                  },
+                  "arguments":[
+                    {
+                      "value":{
+                        "selection":{
+                          "directReference":{
+                            "structField":{
+                              "field": 3
+                            }
+                          },
+                          "rootReference":{
+
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "value":{
+                        "scalarFunction":{
+                          "functionReference":1,
+                          "outputType":{
+                            "i32":{
+                              "nullability":"NULLABILITY_NULLABLE"
+                            }
+                          },
+                          "arguments":[
+                            {
+                              "value":{
+                                "literal":{
+                                  "i32":500
+                                }
+                              }
+                            },
+                            {
+                              "value":{
+                                "literal":{
+                                  "i32":300
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "names":[
+          "(L_LINENUMBER + (500 - 300))"
+        ]
+      }
+    }
+  ]
+}

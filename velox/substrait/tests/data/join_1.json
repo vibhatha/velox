@@ -1,0 +1,256 @@
+{
+    "extensionUris": [{
+      "extensionUriAnchor": 1,
+      "uri": "/functions_boolean.yaml"
+    }, {
+      "extensionUriAnchor": 2,
+      "uri": "/functions_comparison.yaml"
+    }],
+    "extensions": [{
+      "extensionFunction": {
+        "extensionUriReference": 1,
+        "name": "and:bool"
+      }
+    }, {
+      "extensionFunction": {
+        "extensionUriReference": 2,
+        "functionAnchor": 1,
+        "name": "equal:any_any"
+      }
+    }],
+    "relations": [{
+      "root": {
+        "input": {
+          "project": {
+            "common": {
+              "emit": {
+                "outputMapping": [16]
+              }
+            },
+            "input": {
+              "read": {
+                "common": {
+                  "direct": {
+                  }
+                },
+                "baseSchema": {
+                  "names": ["l_orderkey", "l_partkey", "l_suppkey", "l_linenumber", "l_quantity", "l_extendedprice", "l_discount", "l_tax", "l_returnflag", "l_linestatus", "l_shipdate", "l_commitdate", "l_receiptdate", "l_shipinstruct", "l_shipmode", "l_comment"],
+                  "struct": {
+                    "types": [{
+                      "i64": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "i64": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "i64": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "i32": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "i64": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "i64": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "i64": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "i64": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "string": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "string": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "date": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "date": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "date": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "string": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "string": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "string": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }],
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "virtual_table": {
+                    "values": [
+                     {
+                      "fields": [
+                       {
+                        "nullable": false,
+                        "i64": "2"
+                       },
+                       {
+                        "nullable": false,
+                        "i64": 6
+                       },
+                       {
+                        "nullable": false,
+                        "i64": 581869302
+                       },
+                       {
+                        "nullable": false,
+                        "i32": "2"
+                       },
+                       {
+                        "nullable": false,
+                        "i64": "5"
+                       },
+                       {
+                        "nullable": false,
+                        "i64": 581869302
+                       },
+                       {
+                        "nullable": false,
+                        "i64": "2"
+                       },
+                       {
+                        "nullable": false,
+                        "i64": "5"
+                       },
+                       {
+                        "nullable": false,
+                        "string": "581869302"
+                       },
+                       {
+                        "nullable": false,
+                        "string": "2"
+                       },
+                       {
+                        "nullable": false,
+                        "date": 1231223
+                       },
+                       {
+                        "nullable": false,
+                        "date": 581869302
+                       },
+                       {
+                        "nullable": false,
+                        "date": "2"
+                       },
+                       {
+                        "nullable": false,
+                        "string": "A"
+                       },
+                       {
+                        "nullable": false,
+                        "string": "581869302"
+                       },
+                       {
+                        "nullable": false,
+                        "string": "581869302"
+                       }
+                      ]
+                     }
+                  ]
+                }
+              }
+            },
+            "expressions": [{
+              "scalarFunction": {
+                "outputType": {
+                  "bool": {
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "arguments": [{
+                  "value": {
+                    "scalarFunction": {
+                      "functionReference": 1,
+                      "outputType": {
+                        "bool": {
+                          "nullability": "NULLABILITY_REQUIRED"
+                        }
+                      },
+                      "arguments": [{
+                        "value": {
+                          "selection": {
+                            "directReference": {
+                              "structField": {
+                                "field": 4
+                              }
+                            },
+                            "rootReference": {
+                            }
+                          }
+                        }
+                      }, {
+                        "value": {
+                          "literal": {
+                            "i64": "5"
+                          }
+                        }
+                      }]
+                    }
+                  }
+                }, {
+                  "value": {
+                    "scalarFunction": {
+                      "functionReference": 1,
+                      "outputType": {
+                        "bool": {
+                          "nullability": "NULLABILITY_REQUIRED"
+                        }
+                      },
+                      "arguments": [{
+                        "value": {
+                          "selection": {
+                            "directReference": {
+                              "structField": {
+                                "field": 3
+                              }
+                            },
+                            "rootReference": {
+                            }
+                          }
+                        }
+                      }, {
+                        "value": {
+                          "literal": {
+                            "i32": 3
+                          }
+                        }
+                      }]
+                    }
+                  }
+                }]
+              }
+            }]
+          }
+        },
+        "names": ["EXPR$0"]
+      }
+    }]
+}

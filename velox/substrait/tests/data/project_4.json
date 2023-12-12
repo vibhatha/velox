@@ -1,0 +1,408 @@
+{
+    "extensionUris": [{
+      "extensionUriAnchor": 1,
+      "uri": "/functions_string.yaml"
+    }, {
+      "extensionUriAnchor": 2,
+      "uri": "/functions_arithmetic.yaml"
+    }],
+    "extensions": [{
+      "extensionFunction": {
+        "extensionUriReference": 1,
+        "name": "substring:str_i32_i32"
+      }
+    }, {
+      "extensionFunction": {
+        "extensionUriReference": 2,
+        "functionAnchor": 1,
+        "name": "add:i32_i32"
+      }
+    }],
+    "relations": [{
+      "root": {
+        "input": {
+          "project": {
+            "common": {
+              "emit": {
+                "outputMapping": [0, 3, 4, 5, 6, 7, 8]
+              }
+            },
+            "input": {
+              "read": {
+                "common": {
+                  "direct": {
+                  }
+                },
+                "baseSchema": {
+                  "names": ["c_custkey", "c_name", "c_nationkey"],
+                  "struct": {
+                    "types": [{
+                      "i32": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "string": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }, {
+                      "i32": {
+                        "nullability": "NULLABILITY_REQUIRED"
+                      }
+                    }],
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "virtual_table": {
+                    "values": [
+                     {
+                      "fields": [
+                       {
+                        "nullable": false,
+                        "i32": "2"
+                       },
+                       {
+                        "nullable": false,
+                        "string": "A"
+                       },
+                       {
+                        "nullable": false,
+                        "i32": 5
+                       }
+                      ]
+                     }
+                  ]
+                }
+              }
+            },
+            "expressions": [{
+              "scalarFunction": {
+                "outputType": {
+                  "string": {
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "arguments": [{
+                  "value": {
+                    "selection": {
+                      "directReference": {
+                        "structField": {
+                          "field": 1
+                        }
+                      },
+                      "rootReference": {
+                      }
+                    }
+                  }
+                }, {
+                  "value": {
+                    "literal": {
+                      "i32": 1
+                    }
+                  }
+                }, {
+                  "value": {
+                    "literal": {
+                      "i32": 5
+                    }
+                  }
+                }]
+              }
+            }, {
+              "scalarFunction": {
+                "outputType": {
+                  "string": {
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "arguments": [{
+                  "value": {
+                    "selection": {
+                      "directReference": {
+                        "structField": {
+                          "field": 1
+                        }
+                      },
+                      "rootReference": {
+                      }
+                    }
+                  }
+                }, {
+                  "value": {
+                    "literal": {
+                      "i32": 10
+                    }
+                  }
+                }, {
+                  "value": {
+                    "literal": {
+                      "i32": 7
+                    }
+                  }
+                }]
+              }
+            }, {
+              "scalarFunction": {
+                "outputType": {
+                  "string": {
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "arguments": [{
+                  "value": {
+                    "selection": {
+                      "directReference": {
+                        "structField": {
+                          "field": 1
+                        }
+                      },
+                      "rootReference": {
+                      }
+                    }
+                  }
+                }, {
+                  "value": {
+                    "literal": {
+                      "i32": 3
+                    }
+                  }
+                }, {
+                  "value": {
+                    "cast": {
+                      "type": {
+                        "i32": {
+                          "nullability": "NULLABILITY_REQUIRED"
+                        }
+                      },
+                      "input": {
+                        "cast": {
+                          "type": {
+                            "i16": {
+                              "nullability": "NULLABILITY_REQUIRED"
+                            }
+                          },
+                          "input": {
+                            "selection": {
+                              "directReference": {
+                                "structField": {
+                                  "field": 2
+                                }
+                              },
+                              "rootReference": {
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }]
+              }
+            }, {
+              "scalarFunction": {
+                "outputType": {
+                  "string": {
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "arguments": [{
+                  "value": {
+                    "selection": {
+                      "directReference": {
+                        "structField": {
+                          "field": 1
+                        }
+                      },
+                      "rootReference": {
+                      }
+                    }
+                  }
+                }, {
+                  "value": {
+                    "selection": {
+                      "directReference": {
+                        "structField": {
+                          "field": 2
+                        }
+                      },
+                      "rootReference": {
+                      }
+                    }
+                  }
+                }, {
+                  "value": {
+                    "literal": {
+                      "i32": 4
+                    }
+                  }
+                }]
+              }
+            }, {
+              "scalarFunction": {
+                "outputType": {
+                  "string": {
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "arguments": [{
+                  "value": {
+                    "selection": {
+                      "directReference": {
+                        "structField": {
+                          "field": 1
+                        }
+                      },
+                      "rootReference": {
+                      }
+                    }
+                  }
+                }, {
+                  "value": {
+                    "cast": {
+                      "type": {
+                        "i32": {
+                          "nullability": "NULLABILITY_REQUIRED"
+                        }
+                      },
+                      "input": {
+                        "cast": {
+                          "type": {
+                            "i16": {
+                              "nullability": "NULLABILITY_REQUIRED"
+                            }
+                          },
+                          "input": {
+                            "selection": {
+                              "directReference": {
+                                "structField": {
+                                  "field": 2
+                                }
+                              },
+                              "rootReference": {
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }, {
+                  "value": {
+                    "selection": {
+                      "directReference": {
+                        "structField": {
+                          "field": 2
+                        }
+                      },
+                      "rootReference": {
+                      }
+                    }
+                  }
+                }]
+              }
+            }, {
+              "scalarFunction": {
+                "outputType": {
+                  "string": {
+                    "nullability": "NULLABILITY_REQUIRED"
+                  }
+                },
+                "arguments": [{
+                  "value": {
+                    "selection": {
+                      "directReference": {
+                        "structField": {
+                          "field": 1
+                        }
+                      },
+                      "rootReference": {
+                      }
+                    }
+                  }
+                }, {
+                  "value": {
+                    "scalarFunction": {
+                      "functionReference": 1,
+                      "outputType": {
+                        "i32": {
+                          "nullability": "NULLABILITY_REQUIRED"
+                        }
+                      },
+                      "arguments": [{
+                        "value": {
+                          "cast": {
+                            "type": {
+                              "i32": {
+                                "nullability": "NULLABILITY_REQUIRED"
+                              }
+                            },
+                            "input": {
+                              "cast": {
+                                "type": {
+                                  "i16": {
+                                    "nullability": "NULLABILITY_REQUIRED"
+                                  }
+                                },
+                                "input": {
+                                  "selection": {
+                                    "directReference": {
+                                      "structField": {
+                                        "field": 2
+                                      }
+                                    },
+                                    "rootReference": {
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }, {
+                        "value": {
+                          "literal": {
+                            "i32": 3
+                          }
+                        }
+                      }]
+                    }
+                  }
+                }, {
+                  "value": {
+                    "cast": {
+                      "type": {
+                        "i32": {
+                          "nullability": "NULLABILITY_REQUIRED"
+                        }
+                      },
+                      "input": {
+                        "cast": {
+                          "type": {
+                            "i16": {
+                              "nullability": "NULLABILITY_REQUIRED"
+                            }
+                          },
+                          "input": {
+                            "selection": {
+                              "directReference": {
+                                "structField": {
+                                  "field": 2
+                                }
+                              },
+                              "rootReference": {
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }]
+              }
+            }]
+          }
+        },
+        "names": ["c_custkey", "EXPR$1", "EXPR$2", "EXPR$3", "EXPR$4", "EXPR$5", "EXPR$6"]
+      }
+    }]
+  }
+  

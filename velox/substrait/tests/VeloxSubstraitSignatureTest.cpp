@@ -15,6 +15,7 @@
  */
 
 #include "velox/substrait/VeloxSubstraitSignature.h"
+#include <type/StringView.h>
 #include "velox/common/base/tests/GTestUtils.h"
 #include "velox/functions/prestosql/registration/RegistrationFunctions.h"
 
@@ -99,6 +100,8 @@ TEST_F(
   ASSERT_EQ(toSubstraitSignature("sum", {INTEGER()}), "sum:i32");
   ASSERT_EQ(toSubstraitSignature("avg", {INTEGER()}), "avg:i32");
   ASSERT_EQ(toSubstraitSignature("count", {INTEGER()}), "count:i32");
+  ASSERT_EQ(
+      toSubstraitSignature("substring", {VARCHAR(), INTEGER(), INTEGER()}), "substring:str_i32_i32");
 
   auto functionType = std::make_shared<const FunctionType>(
       std::vector<TypePtr>{INTEGER(), VARCHAR()}, BIGINT());

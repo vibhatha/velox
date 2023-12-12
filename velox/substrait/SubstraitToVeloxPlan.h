@@ -174,6 +174,15 @@ class SubstraitVeloxPlanConverter {
   /// Memory pool.
   memory::MemoryPool* pool_;
 
+  /// Query context
+  std::shared_ptr<core::QueryCtx> queryCtx_{
+        std::make_shared<facebook::velox::core::QueryCtx>()};
+
+  /// Exec context
+  std::unique_ptr<core::ExecCtx> execCtx_{
+        std::make_unique<core::ExecCtx>(pool_, queryCtx_.get())};
+
+
   /// Helper function to convert the input of Substrait Rel to Velox Node.
   template <typename T>
   core::PlanNodePtr convertSingleInput(T rel) {

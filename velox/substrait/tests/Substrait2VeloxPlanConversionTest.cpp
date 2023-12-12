@@ -23,6 +23,7 @@
 #include "velox/exec/tests/utils/PlanBuilder.h"
 #include "velox/exec/tests/utils/TempDirectoryPath.h"
 #include "velox/substrait/SubstraitToVeloxPlan.h"
+#include "velox/substrait/VeloxToSubstraitPlan.h"
 #include "velox/type/Type.h"
 
 using namespace facebook::velox;
@@ -285,4 +286,73 @@ TEST_F(Substrait2VeloxPlanConversionTest, q6) {
   exec::test::AssertQueryBuilder(planNode)
       .splits(makeSplits(planConverter, planNode))
       .assertResults(expectedResult);
+}
+
+
+TEST_F(Substrait2VeloxPlanConversionTest, q6_v2) {
+    std::string planPath =
+        getDataFilePath("velox/substrait/tests", "data/project_4.json");
+
+    std::cout << planPath << std::endl;
+
+    ::substrait::Plan substraitPlan;
+    JsonToProtoConverter::readFromFile(planPath, substraitPlan);
+
+  // Convert to Velox PlanNode.
+    facebook::velox::substrait::SubstraitVeloxPlanConverter planConverter(
+          pool_.get());
+    auto planNode = planConverter.toVeloxPlan(substraitPlan);
+
+    google::protobuf::Arena arena;
+    std::shared_ptr<facebook::velox::substrait::VeloxToSubstraitPlanConvertor> veloxConvertor =
+      std::make_shared<facebook::velox::substrait::VeloxToSubstraitPlanConvertor>();
+    auto substraitPlan2 = veloxConvertor->toSubstrait(arena, planNode);
+
+    std::string json_string;
+    google::protobuf::util::JsonPrintOptions jsonPrintOptions;
+    jsonPrintOptions.add_whitespace = true; // For a prettified JSON
+    jsonPrintOptions.always_print_primitive_fields = true; // To ensure all fields are printed
+
+    auto msgToJsonStatus = google::protobuf::util::MessageToJsonString(substraitPlan2, &json_string, jsonPrintOptions);
+
+    if (!msgToJsonStatus.ok()) {
+        std::cerr << "Failed to convert proto to JSON: " << msgToJsonStatus.ToString() << std::endl;
+    }
+
+    std::cout << json_string << std::endl;
+
+}
+
+TEST_F(Substrait2VeloxPlanConversionTest, q6_v3) {
+    std::string planPath =
+        getDataFilePath("velox/substrait/tests", "data/project_0.json");
+
+    std::cout << planPath << std::endl;
+
+    ::substrait::Plan substraitPlan;
+    JsonToProtoConverter::readFromFile(planPath, substraitPlan);
+
+  // Convert to Velox PlanNode.
+    facebook::velox::substrait::SubstraitVeloxPlanConverter planConverter(
+          pool_.get());
+    auto planNode = planConverter.toVeloxPlan(substraitPlan);
+
+    google::protobuf::Arena arena;
+    std::shared_ptr<facebook::velox::substrait::VeloxToSubstraitPlanConvertor> veloxConvertor =
+      std::make_shared<facebook::velox::substrait::VeloxToSubstraitPlanConvertor>();
+    auto substraitPlan2 = veloxConvertor->toSubstrait(arena, planNode);
+
+    std::string json_string;
+    google::protobuf::util::JsonPrintOptions jsonPrintOptions;
+    jsonPrintOptions.add_whitespace = true; // For a prettified JSON
+    jsonPrintOptions.always_print_primitive_fields = true; // To ensure all fields are printed
+
+    auto msgToJsonStatus = google::protobuf::util::MessageToJsonString(substraitPlan2, &json_string, jsonPrintOptions);
+
+    if (!msgToJsonStatus.ok()) {
+        std::cerr << "Failed to convert proto to JSON: " << msgToJsonStatus.ToString() << std::endl;
+    }
+
+    std::cout << json_string << std::endl;
+
 }

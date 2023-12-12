@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 
+#include <common/memory/MemoryPool.h>
+#include "velox/expression/Expr.h"
+#include "velox/parse/Expressions.h"
+#include "velox/parse/ExpressionsParser.h"
 #include "velox/substrait/SubstraitToVeloxExpr.h"
 #include "velox/substrait/TypeUtils.h"
 #include "velox/vector/FlatVector.h"
+
 
 using namespace facebook::velox;
 namespace {
@@ -152,6 +157,26 @@ bool isNullOnFailure(
   }
 }
 
+std::unique_ptr<exec::ExprSet> compile(const core::TypedExprPtr& expr, core::ExecCtx* execCtx) {
+    return std::make_unique<exec::ExprSet>(
+      std::vector<core::TypedExprPtr>{expr}, execCtx);
+}
+
+core::TypedExprPtr optimizeExpression(const core::TypedExprPtr& expr, const RowTypePtr& inputType, memory::MemoryPool* pool, core::ExecCtx* execCtx) {
+  auto constantFoldedExpr = std::make_unique<exec::ExprSet>(std::vector<core::TypedExprPtr>{expr}, execCtx);
+  std::string outputSqlExpr = constantFoldedExpr->expr(0)->toSql();
+  parse::ParseOptions options;
+  auto iexpr = parse::parseExpr(outputSqlExpr, options);
+  return core::Expressions::inferTypes(iexpr, inputType, pool);
+}
+
+std::shared_ptr<const core::IExpr> optimizeIExpression(const core::TypedExprPtr& expr, core::ExecCtx* execCtx) {
+  auto constantFoldedExpr = std::make_unique<exec::ExprSet>(std::vector<core::TypedExprPtr>{expr}, execCtx);
+  std::string outputSqlExpr = constantFoldedExpr->expr(0)->toSql();
+  parse::ParseOptions options;
+  return parse::parseExpr(outputSqlExpr, options);
+}
+
 } // namespace
 
 namespace facebook::velox::substrait {
@@ -171,7 +196,7 @@ SubstraitVeloxExprConverter::toVeloxExpr(
       if (colIdx <= inputSize) {
         const auto& inputTypes = inputType->children();
         // Convert type to row.
-        return std::make_shared<core::FieldAccessTypedExpr>(
+        return  std::make_shared<core::FieldAccessTypedExpr>(
             inputTypes[colIdx],
             std::make_shared<core::InputTypedExpr>(inputTypes[colIdx]),
             inputNames[colIdx]);
@@ -197,8 +222,9 @@ core::TypedExprPtr SubstraitVeloxExprConverter::toVeloxExpr(
       functionMap_, substraitFunc.function_reference());
   std::string typeName =
       substraitParser_.parseType(substraitFunc.output_type())->type;
-  return std::make_shared<const core::CallTypedExpr>(
+  auto callExpr = std::make_shared<const core::CallTypedExpr>(
       toVeloxType(typeName), std::move(params), veloxFunction);
+  return optimizeExpression(callExpr, inputType, pool_, execCtx_.get());
 }
 
 std::shared_ptr<const core::ConstantTypedExpr>
